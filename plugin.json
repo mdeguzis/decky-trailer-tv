@@ -1,0 +1,11 @@
+{
+  "name": "Trailer TV",
+  "author": "mdeguzis",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["screensaver", "trailers", "media"],
+    "description": "When your Deck goes idle (docked/charging), play random featured Steam store trailers instead of a blank screen.",
+    "image": "https://raw.githubusercontent.com/mdeguzis/decky-trailer-tv/main/assets/logo.png"
+  }
+}

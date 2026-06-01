@@ -1,0 +1,30 @@
+{
+  "name": "decky-trailer-tv",
+  "version": "0.1.0",
+  "description": "Idle screensaver that plays random featured Steam store game trailers, reviving the old SteamOS Trailer TV.",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["decky", "plugin", "steam-deck", "trailers", "screensaver"],
+  "author": "mdeguzis",
+  "license": "GPL-3.0-or-later",
+  "devDependencies": {
+    "@decky/rollup": "^1.0.2",
+    "@decky/ui": "^4.11.0",
+    "@types/react": "19.1.1",
+    "@types/react-dom": "19.1.1",
+    "rollup": "^4.53.3",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@decky/api": "^1.1.3",
+    "hls.js": "^1.5.17",
+    "react-icons": "^5.3.0",
+    "tslib": "^2.7.0"
+  }
+}
