@@ -1,14 +1,18 @@
 import { definePlugin, routerHook } from "@decky/api";
-import { staticClasses, Navigation, PanelSection, PanelSectionRow, ButtonItem } from "@decky/ui";
+import { staticClasses, Navigation } from "@decky/ui";
 import { FaTv } from "react-icons/fa";
+import { TrailerPlayer } from "./components/TrailerPlayer";
+import { QamPanel } from "./components/QamPanel";
+import { getSettings, logEvent } from "./lib/backend";
 
 const ROUTE = "/trailer-tv";
-
-// SPIKE TUNING -- short idle window so we can test without waiting minutes.
-// Override live from the CEF console with: window.__TRAILER_TV_IDLE_SECONDS__ = 10
-const DEFAULT_IDLE_SECONDS = 20;
 const GAMEPAD_POLL_MS = 400;
 const TICK_MS = 1000;
+const SETTINGS_POLL_MS = 15000;
+
+// Fallback if settings haven't loaded yet. Override live from the CEF console
+// with: window.__TRAILER_TV_IDLE_SECONDS__ = 10
+const FALLBACK_IDLE_SECONDS = 120;
 
 declare global {
   interface Window {
@@ -18,90 +22,52 @@ declare global {
   }
 }
 
-function log(message: string, extra?: Record<string, unknown>) {
-  // Visible in `make get-cef-capture` / the CEF console.
-  console.log(`[trailer-tv] ${message}`, extra ?? "");
-}
-
-function SpikeFullscreen() {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "black",
-        color: "white",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 40,
-        gap: 16,
-        zIndex: 99999,
-      }}
-      onClick={() => Navigation.NavigateBack()}
-    >
-      <div>Trailer TV (spike)</div>
-      <div style={{ fontSize: 22, color: "#9ad" }}>
-        idle-triggered screensaver placeholder
-      </div>
-      <div style={{ fontSize: 18, color: "#888" }}>any input exits</div>
-    </div>
-  );
-}
-
-function QamSpike() {
-  return (
-    <PanelSection title="Trailer TV (spike)">
-      <PanelSectionRow>
-        <ButtonItem layout="below" onClick={() => window.__TRAILER_TV_START__?.()}>
-          Start now
-        </ButtonItem>
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <ButtonItem layout="below" onClick={() => window.__TRAILER_TV_STOP__?.()}>
-          Stop
-        </ButtonItem>
-      </PanelSectionRow>
-    </PanelSection>
-  );
-}
-
 /**
- * Self-contained idle watcher for the spike. Tracks the last input time across
- * DOM events and gamepad polling; when idle long enough, navigates to the
- * fullscreen route. Any input while active navigates back. No backend / power
- * gate yet -- this exists purely to prove idle-fire works in Game Mode.
+ * Watch for input inactivity and navigate to the fullscreen trailer route once
+ * idle long enough. Idle threshold comes from settings.idleSeconds (a live CEF
+ * console override wins, for testing). Any input while active navigates back.
+ * No power gate yet -- that and Steam-power-setting alignment come next.
  */
 function startIdleWatcher() {
   let lastActivity = Date.now();
   let active = false;
+  let idleSeconds = FALLBACK_IDLE_SECONDS;
 
-  const idleMs = () => (window.__TRAILER_TV_IDLE_SECONDS__ ?? DEFAULT_IDLE_SECONDS) * 1000;
+  const loadIdle = () =>
+    void getSettings()
+      .then((s) => {
+        idleSeconds = s.idleSeconds ?? FALLBACK_IDLE_SECONDS;
+      })
+      .catch(() => undefined);
+  loadIdle();
+
+  const idleMs = () =>
+    (window.__TRAILER_TV_IDLE_SECONDS__ ?? idleSeconds) * 1000;
 
   const start = () => {
     if (active) return;
     active = true;
-    log("activating screensaver", { idleForMs: Date.now() - lastActivity });
+    logEvent("INFO", "screensaver activating", {
+      source: "idleWatcher",
+      idleForMs: Date.now() - lastActivity,
+    });
     Navigation.Navigate(ROUTE);
   };
 
   const stop = () => {
     if (!active) return;
     active = false;
-    log("dismissing screensaver");
     Navigation.NavigateBack();
   };
 
   const markActivity = (source: string) => {
     lastActivity = Date.now();
     if (active) {
-      log("input during screensaver -> dismiss", { source });
+      logEvent("INFO", "screensaver dismissed by input", { source });
       stop();
     }
   };
 
-  // Manual/remote hooks.
   window.__TRAILER_TV_START__ = start;
   window.__TRAILER_TV_STOP__ = stop;
 
@@ -121,9 +87,7 @@ function startIdleWatcher() {
     const pads = navigator.getGamepads?.() ?? [];
     for (const pad of pads) {
       if (!pad) continue;
-      const pressed = pad.buttons.some((b) => b.pressed);
-      const moved = pad.axes.some((a) => Math.abs(a) > 0.5);
-      if (pressed || moved) {
+      if (pad.buttons.some((b) => b.pressed) || pad.axes.some((a) => Math.abs(a) > 0.5)) {
         markActivity("gamepad");
         break;
       }
@@ -132,31 +96,29 @@ function startIdleWatcher() {
 
   const tick = window.setInterval(() => {
     if (active) return;
-    const idleFor = Date.now() - lastActivity;
-    if (idleFor >= idleMs()) {
-      start();
-    }
+    if (Date.now() - lastActivity >= idleMs()) start();
   }, TICK_MS);
 
-  log("idle watcher started", { defaultIdleSeconds: DEFAULT_IDLE_SECONDS });
+  const settingsPoll = window.setInterval(loadIdle, SETTINGS_POLL_MS);
 
   return () => {
     domEvents.forEach((evt) => window.removeEventListener(evt, onDom, true));
     window.clearInterval(gamepadPoll);
     window.clearInterval(tick);
+    window.clearInterval(settingsPoll);
     delete window.__TRAILER_TV_START__;
     delete window.__TRAILER_TV_STOP__;
   };
 }
 
 export default definePlugin(() => {
-  routerHook.addRoute(ROUTE, SpikeFullscreen, { exact: true });
+  routerHook.addRoute(ROUTE, TrailerPlayer, { exact: true });
   const stopWatcher = startIdleWatcher();
 
   return {
     name: "Trailer TV",
     titleView: <div className={staticClasses.Title}>Trailer TV</div>,
-    content: <QamSpike />,
+    content: <QamPanel />,
     icon: <FaTv />,
     onDismount() {
       stopWatcher();

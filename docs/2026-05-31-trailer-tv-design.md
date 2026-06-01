@@ -125,6 +125,19 @@ SteamClient "user idle" signal. Next: replace the placeholder overlay with the
 real hls.js player fed by the backend playlist, then layer in the power gate and a
 production idle timeout.
 
+## Planned next (post-playback)
+
+- Trigger follows Steam's OWN power settings, not our own timeout. Read the user's
+  configured Steam idle behavior (Settings > Power: screen-off / suspend timeouts)
+  via SteamClient and fire Trailer TV when SteamOS would otherwise dim/sleep, so it
+  respects whatever the user already set. Trigger-type setting maps to Steam's:
+  `idle` (screen-off timeout) | `sleep` (suspend timeout) | `both`.
+  - Spike needed: find where SteamClient exposes these timeouts (settingsStore /
+    SteamClient.System.* / SteamClient.Settings) and whether we can observe the
+    dim/suspend moment. Our `idleSeconds` setting is only a fallback until then.
+- Screen-blank inhibitor so the Deck's own dim/blank doesn't fight the overlay.
+- Power gate (docked/charging vs always) from the design above.
+
 ## Out of scope (v1, YAGNI)
 
 Owned-library / wishlist sources, curated app-ID lists, per-game skip/like, video
