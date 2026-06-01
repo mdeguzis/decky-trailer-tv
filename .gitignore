@@ -19,3 +19,6 @@ coverage/
 # Editor/OS
 .DS_Store
 .vscode/
+
+# Local-only planning docs (not shipped)
+docs/plans/
