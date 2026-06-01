@@ -50,6 +50,19 @@ export function isOnAC(): boolean {
   return onAC;
 }
 
+/**
+ * True if a game/app is currently running. Trailer TV must never take over the
+ * screen during gameplay. Uses the same SteamClient call decky-proton-pulse uses.
+ */
+export function isGameRunning(): boolean {
+  try {
+    const apps = SteamClient.GameSessions?.GetRunningApps?.() ?? [];
+    return Array.isArray(apps) && apps.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export interface SteamIdle {
   /** Steam's dim/screensaver timeout for the current power source (0 = disabled). */
   screensaverSec: number;

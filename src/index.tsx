@@ -4,7 +4,13 @@ import { FaTv } from "react-icons/fa";
 import { TrailerPlayer } from "./components/TrailerPlayer";
 import { QamPanel } from "./components/QamPanel";
 import { getSettings, logEvent } from "./lib/backend";
-import { startPowerTracking, stopPowerTracking, computeIdleSeconds, decideIdle } from "./lib/steamPower";
+import {
+  startPowerTracking,
+  stopPowerTracking,
+  computeIdleSeconds,
+  decideIdle,
+  isGameRunning,
+} from "./lib/steamPower";
 
 const ROUTE = "/trailer-tv";
 const GAMEPAD_POLL_MS = 400;
@@ -71,6 +77,10 @@ function startIdleWatcher() {
 
   const start = (trigger: string) => {
     if (active) return;
+    if (isGameRunning()) {
+      logEvent("INFO", "screensaver suppressed: game running", { trigger });
+      return;
+    }
     active = true;
     const d = decideIdle(customIdleSeconds, fallbackSeconds);
     logEvent("INFO", "screensaver activating", {
@@ -129,6 +139,12 @@ function startIdleWatcher() {
 
   const tick = window.setInterval(() => {
     if (active) return;
+    // Never fire while a game is running -- and keep the idle clock reset so it
+    // doesn't immediately fire the moment the game exits.
+    if (isGameRunning()) {
+      lastActivity = Date.now();
+      return;
+    }
     if (Date.now() - lastActivity >= idleMs()) start("idle");
   }, TICK_MS);
 

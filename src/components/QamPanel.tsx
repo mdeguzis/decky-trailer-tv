@@ -6,6 +6,7 @@ import {
   ButtonItem,
   ToggleField,
   DropdownItem,
+  SliderField,
 } from "@decky/ui";
 import { getSettings, setSettings, refreshPlaylist } from "../lib/backend";
 import type { Settings, TrailerSource } from "../lib/types";
@@ -61,6 +62,22 @@ export function QamPanel() {
           label="Play audio"
           checked={settings.audio}
           onChange={(v) => void update({ audio: v })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <SliderField
+          label="Start after idle"
+          description={
+            settings.customIdleSeconds === 0
+              ? "0 = follow Steam's dim time. Set below your Steam dim so it fires first."
+              : `Starts after ${settings.customIdleSeconds}s idle (overrides Steam).`
+          }
+          value={settings.customIdleSeconds}
+          min={0}
+          max={600}
+          step={15}
+          showValue
+          onChange={(v) => void update({ customIdleSeconds: v })}
         />
       </PanelSectionRow>
       <PanelSectionRow>
