@@ -125,17 +125,31 @@ SteamClient "user idle" signal. Next: replace the placeholder overlay with the
 real hls.js player fed by the backend playlist, then layer in the power gate and a
 production idle timeout.
 
-## Planned next (post-playback)
+## Trigger + keep-awake (decided 2026-06-01)
 
-- Trigger follows Steam's OWN power settings, not our own timeout. Read the user's
-  configured Steam idle behavior (Settings > Power: screen-off / suspend timeouts)
-  via SteamClient and fire Trailer TV when SteamOS would otherwise dim/sleep, so it
-  respects whatever the user already set. Trigger-type setting maps to Steam's:
-  `idle` (screen-off timeout) | `sleep` (suspend timeout) | `both`.
-  - Spike needed: find where SteamClient exposes these timeouts (settingsStore /
-    SteamClient.System.* / SteamClient.Settings) and whether we can observe the
-    dim/suspend moment. Our `idleSeconds` setting is only a fallback until then.
-- Screen-blank inhibitor so the Deck's own dim/blank doesn't fight the overlay.
+Steam power values (read from `window.settingsStore.m_ClientSettings.*`, seconds):
+`system_idle_screensaver_{ac,battery}_sec` (dim) and
+`system_idle_suspend_{ac,battery}_sec` (sleep). AC vs battery chosen from charging
+state (`SteamClient.System.RegisterForBatteryStateChanges`, eACState 2 = AC).
+
+Trigger:
+- Fire Trailer TV RIGHT BEFORE Steam's dim timeout for the current power source
+  (dim minus a small margin) so we take over before the OS blanks. If dim is 0
+  (disabled for that source), fall back to the suspend timeout (minus margin).
+- Optional custom override (`customIdleSeconds`, default 0 = follow Steam). If set it
+  must be LESS than Steam's dim, otherwise error on apply (we must fire first).
+
+Keep-awake (smart per power source):
+- Docked/AC: while Trailer TV is active, disable the Deck's dim+suspend and restore
+  the user's exact saved values on exit, so trailers play until input.
+- Battery: keep dim disabled (we're showing trailers) but RESPECT the user's sleep
+  timeout so the Deck still suspends and doesn't drain.
+- No keep-awake API exists; the mechanism is writing the idle settings via
+  `SteamClient.System.UpdateSettings` (native, signature unknown -- needs a careful
+  reversible on-device spike) and persisting originals to disk for crash-safe restore.
+  FIRST verify empirically whether the OS even dims/suspends over our active route;
+  if gamescope treats our focused route as activity, the write side may be unneeded.
+
 - Power gate (docked/charging vs always) from the design above.
 
 ## Out of scope (v1, YAGNI)

@@ -11,4 +11,5 @@ export interface Settings {
   source: TrailerSource;
   audio: boolean;
   idleSeconds: number;
+  customIdleSeconds: number;
 }

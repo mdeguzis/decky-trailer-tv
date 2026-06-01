@@ -4,6 +4,7 @@ import { FaTv } from "react-icons/fa";
 import { TrailerPlayer } from "./components/TrailerPlayer";
 import { QamPanel } from "./components/QamPanel";
 import { getSettings, logEvent } from "./lib/backend";
+import { startPowerTracking, stopPowerTracking, computeIdleSeconds } from "./lib/steamPower";
 
 const ROUTE = "/trailer-tv";
 const GAMEPAD_POLL_MS = 400;
@@ -32,18 +33,24 @@ declare global {
 function startIdleWatcher() {
   let lastActivity = Date.now();
   let active = false;
-  let idleSeconds = FALLBACK_IDLE_SECONDS;
+  let customIdleSeconds = 0;
+  let fallbackSeconds = FALLBACK_IDLE_SECONDS;
 
   const loadIdle = () =>
     void getSettings()
       .then((s) => {
-        idleSeconds = s.idleSeconds ?? FALLBACK_IDLE_SECONDS;
+        customIdleSeconds = s.customIdleSeconds ?? 0;
+        fallbackSeconds = s.idleSeconds ?? FALLBACK_IDLE_SECONDS;
       })
       .catch(() => undefined);
   loadIdle();
+  startPowerTracking();
 
+  // Fire right before Steam's dim timeout (or a custom override). A live CEF
+  // console value still wins, for testing.
   const idleMs = () =>
-    (window.__TRAILER_TV_IDLE_SECONDS__ ?? idleSeconds) * 1000;
+    (window.__TRAILER_TV_IDLE_SECONDS__ ??
+      computeIdleSeconds(customIdleSeconds, fallbackSeconds)) * 1000;
 
   const start = () => {
     if (active) return;
@@ -110,6 +117,7 @@ function startIdleWatcher() {
     window.clearInterval(gamepadPoll);
     window.clearInterval(tick);
     window.clearInterval(settingsPoll);
+    stopPowerTracking();
     delete window.__TRAILER_TV_START__;
     delete window.__TRAILER_TV_STOP__;
     delete window.__TRAILER_TV_ON_EXIT__;
