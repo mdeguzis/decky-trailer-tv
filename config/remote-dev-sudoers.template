@@ -1,0 +1,1 @@
+@DECK_USER@ ALL=(root) NOPASSWD: /usr/bin/mkdir -p @REMOTE_PLUGIN_DIR@, /usr/bin/rsync, /usr/bin/rm -rf @REMOTE_PLUGIN_DIR@, /usr/bin/chown -R root\:root @REMOTE_PLUGIN_DIR@, /usr/bin/systemctl restart plugin_loader, /usr/bin/systemctl status plugin_loader, /usr/bin/systemctl daemon-reload

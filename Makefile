@@ -137,14 +137,37 @@ REMOTE_SSH     = ssh $(DECK_USER)@$(DECK_IP)
 REMOTE_SSH_TTY = ssh -tt $(DECK_USER)@$(DECK_IP)
 REMOTE_PLUGIN_DIR = /home/$(DECK_USER)/homebrew/plugins/$(PLUGIN_NAME)
 
+# Configure passwordless sudo on the Deck so deploy/reload can write to the
+# root-owned plugins dir. Run once per Deck.
+setup-remote-dev:
+	$(call require_deck_ip)
+	@DECK_IP="$(DECK_IP)" DECK_USER="$(DECK_USER)" REMOTE_PLUGIN_DIR="$(REMOTE_PLUGIN_DIR)" bash scripts/setup_remote_dev.sh
+
+# Decky's plugins dir is owned by root (the loader runs as root), so we write
+# as root via passwordless sudo configured by `make setup-remote-dev`.
+RSYNC_SUDO = rsync -rlptz --omit-dir-times --chown=root:root --rsync-path="sudo -n rsync"
+
 deploy: build
 	$(call require_deck_ip)
 	$(call show_mode)
 	@echo "Deploying $(PLUGIN_NAME) to $(DECK_USER)@$(DECK_IP):$(REMOTE_PLUGIN_DIR)"
-	$(REMOTE_SSH) "mkdir -p $(REMOTE_PLUGIN_DIR)/dist $(REMOTE_PLUGIN_DIR)/lib"
-	rsync -avz --delete dist/  $(DECK_USER)@$(DECK_IP):$(REMOTE_PLUGIN_DIR)/dist/
-	rsync -avz --delete --exclude='__pycache__' lib/ $(DECK_USER)@$(DECK_IP):$(REMOTE_PLUGIN_DIR)/lib/
-	rsync -avz main.py plugin.json package.json $(DECK_USER)@$(DECK_IP):$(REMOTE_PLUGIN_DIR)/
+	@if ! $(REMOTE_SSH) "sudo -n /usr/bin/mkdir -p $(REMOTE_PLUGIN_DIR)" 2>/dev/null; then \
+		echo ""; \
+		echo "ERROR: passwordless sudo is not configured on the Deck."; \
+		echo "The Decky plugins dir ($(REMOTE_PLUGIN_DIR)) is root-owned, so deploy needs it."; \
+		echo "Run this once, then re-run deploy:"; \
+		echo "  make setup-remote-dev DECK_IP=$(DECK_IP)"; \
+		exit 1; \
+	fi
+	$(RSYNC_SUDO) --delete dist/ $(DECK_USER)@$(DECK_IP):$(REMOTE_PLUGIN_DIR)/dist/
+	@if [ -d lib ]; then \
+		$(RSYNC_SUDO) --delete --exclude='__pycache__' lib/ $(DECK_USER)@$(DECK_IP):$(REMOTE_PLUGIN_DIR)/lib/; \
+	fi
+	@for f in main.py plugin.json package.json; do \
+		if [ -f $$f ]; then \
+			$(RSYNC_SUDO) $$f $(DECK_USER)@$(DECK_IP):$(REMOTE_PLUGIN_DIR)/; \
+		fi; \
+	done
 	@echo "Deploy complete."
 
 deploy-reload: deploy reload
