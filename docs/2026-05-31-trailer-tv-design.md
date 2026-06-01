@@ -108,6 +108,15 @@ any input ──> Navigate(back) + cooldown
   advance/wraparound. Pure logic, no DOM.
 - Manual: `make deploy` to the Deck, dock, idle, confirm takeover.
 
+## Spike result (2026-06-01)
+
+Spike built and deployed as `src/index.tsx` (commit: feat: idle-takeover spike).
+On-device hand-test pending. Check: open QAM > Trailer TV > "Open fullscreen";
+confirm black overlay covers the full screen; press a button or move a stick and
+verify `[trailer-tv-spike] input:` lines appear in the CEF console (`make get-cef-capture`).
+If global `window` listeners do not fire in Game Mode, switch the idle watcher
+(Task 4.2) to poll `SteamClient.Input.RegisterForControllerStateChanges` instead.
+
 ## Out of scope (v1, YAGNI)
 
 Owned-library / wishlist sources, curated app-ID lists, per-game skip/like, video
