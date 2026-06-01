@@ -3,6 +3,8 @@
 // Read-only: this module never mutates Steam settings (the keep-awake write is a
 // separate, carefully-tested step).
 
+import { logEvent } from "./backend";
+
 // SteamClient and settingsStore are injected into the SteamUI global scope.
 declare const SteamClient: any;
 
@@ -18,10 +20,20 @@ let unregister: { unregister: () => void } | null = null;
 export function startPowerTracking(): void {
   try {
     unregister = SteamClient.System.RegisterForBatteryStateChanges((state: any) => {
-      onAC = state?.eACState === 2;
+      const ac = state?.eACState === 2;
+      if (ac !== onAC) {
+        onAC = ac;
+        logEvent("INFO", "power source changed", {
+          onAC: ac,
+          source: "SteamClient.System.RegisterForBatteryStateChanges",
+          field: "eACState",
+        });
+      }
     });
-  } catch {
+    logEvent("DEBUG", "power tracking started", { onAC });
+  } catch (e) {
     onAC = true;
+    logEvent("WARNING", "power tracking unavailable, assuming AC", { reason: String(e) });
   }
 }
 
@@ -62,20 +74,37 @@ export function readSteamIdle(): SteamIdle | null {
   }
 }
 
+export interface IdleDecision {
+  seconds: number;
+  /** Which input produced `seconds` -- useful when a trigger fires unexpectedly. */
+  basis: "custom" | "steam-dim" | "steam-suspend" | "fallback";
+  onAC: boolean;
+}
+
 /**
- * How long to wait before starting Trailer TV.
+ * Decide how long to wait before starting Trailer TV, with the basis for logging.
  * - customIdleSeconds > 0 overrides everything (user must set it below Steam's dim).
  * - else follow Steam's dim minus a small margin; if dim is disabled (0), follow
  *   the suspend timeout minus the margin.
  * - if Steam settings can't be read, fall back to `fallbackSeconds`.
  */
-export function computeIdleSeconds(customIdleSeconds: number, fallbackSeconds: number): number {
+export function decideIdle(customIdleSeconds: number, fallbackSeconds: number): IdleDecision {
+  const onAC = isOnAC();
   if (customIdleSeconds && customIdleSeconds > 0) {
-    return Math.max(customIdleSeconds, 1);
+    return { seconds: Math.max(customIdleSeconds, 1), basis: "custom", onAC };
   }
   const steam = readSteamIdle();
-  if (!steam) return fallbackSeconds;
-  const base = steam.screensaverSec > 0 ? steam.screensaverSec : steam.suspendSec;
-  if (!base || base <= 0) return fallbackSeconds;
-  return Math.max(base - FIRE_BEFORE_SEC, MIN_IDLE_SEC);
+  if (!steam) return { seconds: fallbackSeconds, basis: "fallback", onAC };
+  if (steam.screensaverSec > 0) {
+    return { seconds: Math.max(steam.screensaverSec - FIRE_BEFORE_SEC, MIN_IDLE_SEC), basis: "steam-dim", onAC };
+  }
+  if (steam.suspendSec > 0) {
+    return { seconds: Math.max(steam.suspendSec - FIRE_BEFORE_SEC, MIN_IDLE_SEC), basis: "steam-suspend", onAC };
+  }
+  return { seconds: fallbackSeconds, basis: "fallback", onAC };
+}
+
+/** Convenience wrapper returning just the seconds (used by the idle tick). */
+export function computeIdleSeconds(customIdleSeconds: number, fallbackSeconds: number): number {
+  return decideIdle(customIdleSeconds, fallbackSeconds).seconds;
 }

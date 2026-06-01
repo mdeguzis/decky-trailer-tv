@@ -4,7 +4,7 @@ import { FaTv } from "react-icons/fa";
 import { TrailerPlayer } from "./components/TrailerPlayer";
 import { QamPanel } from "./components/QamPanel";
 import { getSettings, logEvent } from "./lib/backend";
-import { startPowerTracking, stopPowerTracking, computeIdleSeconds } from "./lib/steamPower";
+import { startPowerTracking, stopPowerTracking, computeIdleSeconds, decideIdle } from "./lib/steamPower";
 
 const ROUTE = "/trailer-tv";
 const GAMEPAD_POLL_MS = 400;
@@ -35,16 +35,33 @@ function startIdleWatcher() {
   let active = false;
   let customIdleSeconds = 0;
   let fallbackSeconds = FALLBACK_IDLE_SECONDS;
+  let lastLoggedIdle = -1;
+
+  // Log the active trigger threshold whenever it changes, so the logs show how
+  // long until the screensaver fires without spamming every tick.
+  const logIdleIfChanged = () => {
+    const d = decideIdle(customIdleSeconds, fallbackSeconds);
+    if (d.seconds !== lastLoggedIdle) {
+      lastLoggedIdle = d.seconds;
+      logEvent("INFO", "idle trigger armed", {
+        triggerSeconds: d.seconds,
+        basis: d.basis,
+        onAC: d.onAC,
+      });
+    }
+  };
 
   const loadIdle = () =>
     void getSettings()
       .then((s) => {
         customIdleSeconds = s.customIdleSeconds ?? 0;
         fallbackSeconds = s.idleSeconds ?? FALLBACK_IDLE_SECONDS;
+        logIdleIfChanged();
       })
-      .catch(() => undefined);
+      .catch((e) => logEvent("WARNING", "idle settings load failed", { reason: String(e) }));
   loadIdle();
   startPowerTracking();
+  logEvent("INFO", "idle watcher started", { fallbackSeconds: FALLBACK_IDLE_SECONDS });
 
   // Fire right before Steam's dim timeout (or a custom override). A live CEF
   // console value still wins, for testing.
@@ -52,11 +69,15 @@ function startIdleWatcher() {
     (window.__TRAILER_TV_IDLE_SECONDS__ ??
       computeIdleSeconds(customIdleSeconds, fallbackSeconds)) * 1000;
 
-  const start = () => {
+  const start = (trigger: string) => {
     if (active) return;
     active = true;
+    const d = decideIdle(customIdleSeconds, fallbackSeconds);
     logEvent("INFO", "screensaver activating", {
-      source: "idleWatcher",
+      trigger,
+      basis: d.basis,
+      triggerSeconds: d.seconds,
+      onAC: d.onAC,
       idleForMs: Date.now() - lastActivity,
     });
     Navigation.Navigate(ROUTE);
@@ -64,6 +85,7 @@ function startIdleWatcher() {
 
   const stop = () => {
     if (!active) return;
+    logEvent("INFO", "screensaver stopped manually", {});
     Navigation.NavigateBack();
   };
 
@@ -78,7 +100,7 @@ function startIdleWatcher() {
     lastActivity = Date.now();
   };
 
-  window.__TRAILER_TV_START__ = start;
+  window.__TRAILER_TV_START__ = () => start("manual-global");
   window.__TRAILER_TV_STOP__ = stop;
   window.__TRAILER_TV_ON_EXIT__ = onExit;
 
@@ -107,7 +129,7 @@ function startIdleWatcher() {
 
   const tick = window.setInterval(() => {
     if (active) return;
-    if (Date.now() - lastActivity >= idleMs()) start();
+    if (Date.now() - lastActivity >= idleMs()) start("idle");
   }, TICK_MS);
 
   const settingsPoll = window.setInterval(loadIdle, SETTINGS_POLL_MS);
@@ -125,6 +147,7 @@ function startIdleWatcher() {
 }
 
 export default definePlugin(() => {
+  logEvent("INFO", "plugin mounted", {});
   routerHook.addRoute(ROUTE, TrailerPlayer, { exact: true });
   const stopWatcher = startIdleWatcher();
 
@@ -134,6 +157,7 @@ export default definePlugin(() => {
     content: <QamPanel />,
     icon: <FaTv />,
     onDismount() {
+      logEvent("INFO", "plugin unmounting", {});
       stopWatcher();
       routerHook.removeRoute(ROUTE);
     },

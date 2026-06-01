@@ -94,6 +94,14 @@ export function TrailerPlayer() {
     let hls: Hls | null = null;
     const advance = () => setIndex((i) => nextIndex(i, clips.length));
 
+    logEvent("DEBUG", "playing clip", {
+      appid: current.appid,
+      name: current.name,
+      index,
+      total: clips.length,
+      engine: Hls.isSupported() ? "hls.js" : "native",
+    });
+
     const onError = (reason: string) => {
       failuresRef.current += 1;
       logEvent("WARNING", "clip failed", {
