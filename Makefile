@@ -199,11 +199,9 @@ get-cef-capture:
 
 take-screenshot:
 	@echo "Capturing the current Steam UI via CEF remote debugging..."
+	@echo "This may include private on-screen content visible on the Steam UI."
 	@mkdir -p $(SCREENSHOT_DIR)
-	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run python scripts/take_cef_screenshot.py \
-		$(if $(DECK_IP),--deck-ip $(DECK_IP) --deck-user $(DECK_USER),) \
-		--output-dir $(SCREENSHOT_DIR) \
-		$(if $(SCREENSHOT_BASE),--filename-base $(SCREENSHOT_BASE),)
+	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run python scripts/take_cef_screenshot.py $(if $(DECK_IP),--deck-ip $(DECK_IP) --deck-user $(DECK_USER),) --output-dir $(SCREENSHOT_DIR) $(if $(SCREENSHOT_LANGUAGE),--language $(SCREENSHOT_LANGUAGE),) $(if $(SCREENSHOT_BASE),--filename-base $(SCREENSHOT_BASE),) $(if $(SCREENSHOT_GROUP),--group $(SCREENSHOT_GROUP),) $(if $(SCREENSHOT_KEY),--shot-key $(SCREENSHOT_KEY),) $(if $(SCREENSHOT_TITLE),--title "$(SCREENSHOT_TITLE)",) $(if $(SCREENSHOT_CAPTION),--caption "$(SCREENSHOT_CAPTION)",) $(if $(STORE_URL),--store-url "$(STORE_URL)",$(if $(WEB_URL),--prepare-action-json "{\"webUrl\": \"$(WEB_URL)\"}",$(if $(PAGE),--prepare-action-json "{\"steamRoute\": \"$(PAGE)\"}",))) $(if $(DPAD),--dpad-sequence "$(DPAD)",)
 
 reload:
 	$(call show_mode)
