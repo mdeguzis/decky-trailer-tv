@@ -9,9 +9,15 @@ import json
 import subprocess
 from typing import Any
 
+from .plugin_utils import system_command_env
+
 
 def curl_json(url: str, *, timeout: int = 25) -> dict[str, Any] | list[Any]:
-    """Fetch and parse JSON from a URL by shelling out to curl."""
+    """Fetch and parse JSON from a URL by shelling out to curl.
+
+    Runs with a cleaned env (see system_command_env) so Decky's bundled OpenSSL
+    doesn't make system curl fail with ``OPENSSL_3.2.0 not found``.
+    """
     command = [
         "curl", "-LfsS", "--http1.1",
         "--connect-timeout", "20",
@@ -21,7 +27,8 @@ def curl_json(url: str, *, timeout: int = 25) -> dict[str, Any] | list[Any]:
         url,
     ]
     result = subprocess.run(
-        command, capture_output=True, text=True, timeout=timeout + 10, check=False
+        command, capture_output=True, text=True, timeout=timeout + 10,
+        env=system_command_env(), check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(

@@ -192,6 +192,25 @@ logs:
 		tail -f $$HOME/homebrew/logs/$(PLUGIN_NAME)/plugin.log; \
 	fi
 
+# Pull the plugin's log directory into ../logs and prune to the 20 newest.
+get-logs:
+	$(call show_mode)
+	@mkdir -p ../logs
+	@if [ -n "$(DECK_IP)" ]; then \
+		rsync -rav $(DECK_USER)@$(DECK_HOST):~/homebrew/logs/$(PLUGIN_NAME)/ ../logs/; \
+	else \
+		rsync -rav $$HOME/homebrew/logs/$(PLUGIN_NAME)/ ../logs/; \
+	fi
+	@cd ../logs && ls -1t *.log 2>/dev/null | grep -v '^plugin-debug\.log$$' | tail -n +20 | xargs -r rm -f
+
+# Follow the Decky loader's systemd journal (backend stdout/exceptions).
+logs-loader:
+	@if [ -n "$(DECK_IP)" ]; then \
+		$(REMOTE_SSH) "journalctl -u plugin_loader -f"; \
+	else \
+		journalctl -u plugin_loader -f; \
+	fi
+
 get-cef-capture:
 	$(call show_mode)
 	@mkdir -p ../cef-captures
