@@ -192,8 +192,8 @@ logs:
 		tail -f $$HOME/homebrew/logs/$(PLUGIN_NAME)/plugin.log; \
 	fi
 
-# Pull the plugin's log directory into ../logs and prune to the 20 newest.
-LOGS_DIR := $(abspath ../logs)
+# Pull the plugin's log directory into ../logs/<plugin> and prune to the 20 newest.
+LOGS_DIR := $(abspath ../logs/$(PLUGIN_NAME))
 get-logs:
 	$(call show_mode)
 	@mkdir -p $(LOGS_DIR)
