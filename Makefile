@@ -98,6 +98,14 @@ build:
 watch:
 	$(PNPM) watch
 
+# One-time bootstrap: install node deps and sync the Python env (incl. aiohttp,
+# used by the CEF screenshot script).
+setup:
+	@mkdir -p "$(UV_CACHE_DIR)"
+	@echo "Using UV_CACHE_DIR=$(UV_CACHE_DIR)"
+	$(PNPM) i
+	UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync --group dev
+
 node_modules: package.json
 	CI=true $(PNPM) i
 
