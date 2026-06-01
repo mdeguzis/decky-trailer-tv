@@ -55,6 +55,9 @@ def parse_trailer(appdetails: dict[str, Any], appid: int) -> dict[str, Any] | No
     if not isinstance(entry, dict) or not entry.get("success"):
         return None
     data = entry.get("data") or {}
+    # Only real games -- skip hardware (e.g. "Steam Deck"), DLC, soundtracks, etc.
+    if data.get("type") != "game":
+        return None
     movies = data.get("movies") or []
     if not movies:
         return None
