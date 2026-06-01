@@ -193,15 +193,19 @@ logs:
 	fi
 
 # Pull the plugin's log directory into ../logs and prune to the 20 newest.
+LOGS_DIR := $(abspath ../logs)
 get-logs:
 	$(call show_mode)
-	@mkdir -p ../logs
+	@mkdir -p $(LOGS_DIR)
 	@if [ -n "$(DECK_IP)" ]; then \
-		rsync -rav $(DECK_USER)@$(DECK_HOST):~/homebrew/logs/$(PLUGIN_NAME)/ ../logs/; \
+		rsync -rav $(DECK_USER)@$(DECK_HOST):~/homebrew/logs/$(PLUGIN_NAME)/ $(LOGS_DIR)/; \
 	else \
-		rsync -rav $$HOME/homebrew/logs/$(PLUGIN_NAME)/ ../logs/; \
+		rsync -rav $$HOME/homebrew/logs/$(PLUGIN_NAME)/ $(LOGS_DIR)/; \
 	fi
-	@cd ../logs && ls -1t *.log 2>/dev/null | grep -v '^plugin-debug\.log$$' | tail -n +20 | xargs -r rm -f
+	@cd $(LOGS_DIR) && ls -1t *.log 2>/dev/null | grep -v '^plugin-debug\.log$$' | tail -n +20 | xargs -r rm -f
+	@echo ""
+	@echo "Logs synced to: $(LOGS_DIR)"
+	@ls -1t $(LOGS_DIR)/*.log 2>/dev/null | head -5 | sed 's/^/  /' || true
 
 # Follow the Decky loader's systemd journal (backend stdout/exceptions).
 logs-loader:
