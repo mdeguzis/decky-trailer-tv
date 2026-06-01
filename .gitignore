@@ -1,0 +1,21 @@
+# Node
+node_modules/
+dist/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage/
+
+# Build artifacts
+*.zip
+.build-commit
+
+# Editor/OS
+.DS_Store
+.vscode/
