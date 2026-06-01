@@ -10,6 +10,11 @@ function nextIndex(current: number, length: number): number {
   return (current + 1) % length;
 }
 
+// Ignore input for a moment after launch so the button/tap that started the
+// screensaver doesn't immediately dismiss it.
+const INPUT_GRACE_MS = 700;
+const GAMEPAD_POLL_MS = 120;
+
 export function TrailerPlayer() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [clips, setClips] = useState<TrailerClip[]>([]);
@@ -17,6 +22,50 @@ export function TrailerPlayer() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const failuresRef = useRef(0);
+
+  // Exit on ANY input, like a real idle/sleep screensaver -- regardless of how
+  // it was launched (idle trigger or the QAM "Test" button). Notifies the idle
+  // watcher on unmount so it re-arms from now.
+  useEffect(() => {
+    const armAt = Date.now() + INPUT_GRACE_MS;
+    let exited = false;
+
+    const exit = (source: string) => {
+      if (exited || Date.now() < armAt) return;
+      exited = true;
+      logEvent("INFO", "screensaver exited by input", { source });
+      Navigation.NavigateBack();
+    };
+
+    const domEvents: (keyof WindowEventMap)[] = [
+      "keydown",
+      "mousedown",
+      "mousemove",
+      "wheel",
+      "touchstart",
+      "pointerdown",
+      "pointermove",
+    ];
+    const onDom = (e: Event) => exit(e.type);
+    domEvents.forEach((evt) => window.addEventListener(evt, onDom, true));
+
+    // Gamepad buttons/sticks are not DOM events in Game Mode -- poll them.
+    const gamepadPoll = window.setInterval(() => {
+      for (const pad of navigator.getGamepads?.() ?? []) {
+        if (!pad) continue;
+        if (pad.buttons.some((b) => b.pressed) || pad.axes.some((a) => Math.abs(a) > 0.5)) {
+          exit("gamepad");
+          break;
+        }
+      }
+    }, GAMEPAD_POLL_MS);
+
+    return () => {
+      domEvents.forEach((evt) => window.removeEventListener(evt, onDom, true));
+      window.clearInterval(gamepadPoll);
+      window.__TRAILER_TV_ON_EXIT__?.();
+    };
+  }, []);
 
   // Load playlist + settings once on mount.
   useEffect(() => {

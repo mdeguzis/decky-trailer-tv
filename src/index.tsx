@@ -18,6 +18,7 @@ declare global {
   interface Window {
     __TRAILER_TV_START__?: () => void;
     __TRAILER_TV_STOP__?: () => void;
+    __TRAILER_TV_ON_EXIT__?: () => void;
     __TRAILER_TV_IDLE_SECONDS__?: number;
   }
 }
@@ -56,20 +57,23 @@ function startIdleWatcher() {
 
   const stop = () => {
     if (!active) return;
-    active = false;
     Navigation.NavigateBack();
   };
 
-  const markActivity = (source: string) => {
+  // The player owns exit-on-input; it calls this on unmount so we re-arm idle
+  // from now no matter how it closed (input, manual, or playback error).
+  const onExit = () => {
+    active = false;
     lastActivity = Date.now();
-    if (active) {
-      logEvent("INFO", "screensaver dismissed by input", { source });
-      stop();
-    }
+  };
+
+  const markActivity = () => {
+    lastActivity = Date.now();
   };
 
   window.__TRAILER_TV_START__ = start;
   window.__TRAILER_TV_STOP__ = stop;
+  window.__TRAILER_TV_ON_EXIT__ = onExit;
 
   const domEvents: (keyof WindowEventMap)[] = [
     "keydown",
@@ -79,7 +83,7 @@ function startIdleWatcher() {
     "touchstart",
     "pointermove",
   ];
-  const onDom = (e: Event) => markActivity(e.type);
+  const onDom = () => markActivity();
   domEvents.forEach((evt) => window.addEventListener(evt, onDom, true));
 
   // Gamepad input is not delivered as DOM events in Game Mode, so poll it.
@@ -88,7 +92,7 @@ function startIdleWatcher() {
     for (const pad of pads) {
       if (!pad) continue;
       if (pad.buttons.some((b) => b.pressed) || pad.axes.some((a) => Math.abs(a) > 0.5)) {
-        markActivity("gamepad");
+        markActivity();
         break;
       }
     }
@@ -108,6 +112,7 @@ function startIdleWatcher() {
     window.clearInterval(settingsPoll);
     delete window.__TRAILER_TV_START__;
     delete window.__TRAILER_TV_STOP__;
+    delete window.__TRAILER_TV_ON_EXIT__;
   };
 }
 
