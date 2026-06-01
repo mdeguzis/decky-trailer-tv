@@ -108,14 +108,22 @@ any input ──> Navigate(back) + cooldown
   advance/wraparound. Pure logic, no DOM.
 - Manual: `make deploy` to the Deck, dock, idle, confirm takeover.
 
-## Spike result (2026-06-01)
+## Spike result (2026-06-01) -- CONFIRMED WORKING
 
-Spike built and deployed as `src/index.tsx` (commit: feat: idle-takeover spike).
-On-device hand-test pending. Check: open QAM > Trailer TV > "Open fullscreen";
-confirm black overlay covers the full screen; press a button or move a stick and
-verify `[trailer-tv-spike] input:` lines appear in the CEF console (`make get-cef-capture`).
-If global `window` listeners do not fire in Game Mode, switch the idle watcher
-(Task 4.2) to poll `SteamClient.Input.RegisterForControllerStateChanges` instead.
+Validated on hardware (Deck at 192.168.1.203). All three unknowns passed:
+- A `routerHook` fullscreen route (`/trailer-tv`) fully takes over the Game Mode
+  screen (verified by remote screenshot).
+- A self-contained idle watcher (DOM events + `navigator.getGamepads()` polling)
+  fires the route after the idle window with no input.
+- Remote control works without new tooling: `make take-screenshot PAGE=/trailer-tv`
+  navigates the Deck to the route via the proton-pulse `steamRoute` prepare-action,
+  and the CEF screenshot capture-to-clipboard works. `window.__TRAILER_TV_START__()`
+  / `__TRAILER_TV_STOP__()` globals also drive it from the CEF console.
+
+Decision: idle detection via our own input timer is viable; no need to find a
+SteamClient "user idle" signal. Next: replace the placeholder overlay with the
+real hls.js player fed by the backend playlist, then layer in the power gate and a
+production idle timeout.
 
 ## Out of scope (v1, YAGNI)
 
