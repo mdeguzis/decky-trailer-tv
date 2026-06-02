@@ -27,6 +27,20 @@ function isInteresting(serialized: string): boolean {
   });
 }
 
+// Extract readable protobuf message names from a base64 SharedConnection payload.
+function decodeMsgNames(b64: string): string {
+  try {
+    const bytes = atob(b64);
+    const matches = bytes.match(/[A-Za-z][A-Za-z0-9_.]{5,}/g);
+    return matches ? matches.join(",") : "";
+  } catch {
+    return "";
+  }
+}
+
+// Only surface IPC messages plausibly about display/power/idle settings.
+const SETTINGS_MSG_RE = /setting|backlight|dim|idle|display|power|suspend|sleep|screensaver|brightness/i;
+
 function wrapNamespace(name: string, ns: any): void {
   if (!ns || typeof ns !== "object") return;
   for (const key of Object.keys(ns)) {
@@ -39,16 +53,23 @@ function wrapNamespace(name: string, ns: any): void {
     }
     if (typeof orig !== "function") continue;
     const full = `${name}.${key}`;
+    const isSharedMsg = name === "SharedConnection" && key.startsWith("SendMsg");
     const wrapped = function (this: any, ...args: any[]) {
-      if (args.length > 0) {
-        const s = serialize(args);
-        if (isInteresting(s)) {
-          try {
+      try {
+        if (isSharedMsg && typeof args[1] === "string") {
+          // SharedConnection.SendMsg(type, base64proto): decode the message name.
+          const names = decodeMsgNames(args[1]);
+          if (names && SETTINGS_MSG_RE.test(names)) {
+            logEvent("INFO", "steam-spy IPC", { m: full, names, b64: args[1].slice(0, 400) });
+          }
+        } else if (args.length > 0) {
+          const s = serialize(args);
+          if (isInteresting(s)) {
             logEvent("INFO", "steam-spy call", { m: full, args: s.slice(0, 300) });
-          } catch {
-            /* never break the call */
           }
         }
+      } catch {
+        /* never break the call */
       }
       return orig.apply(this, args);
     };
