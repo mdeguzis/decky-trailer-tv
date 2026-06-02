@@ -11,10 +11,10 @@ import {
   decideIdle,
   isGameRunning,
   isOnAC,
+  startControllerActivity,
 } from "./lib/steamPower";
 
 const ROUTE = "/trailer-tv";
-const GAMEPAD_POLL_MS = 400;
 const TICK_MS = 1000;
 const SETTINGS_POLL_MS = 15000;
 
@@ -22,12 +22,22 @@ const SETTINGS_POLL_MS = 15000;
 // with: window.__TRAILER_TV_IDLE_SECONDS__ = 10
 const FALLBACK_IDLE_SECONDS = 120;
 
+export interface TrailerTvStatus {
+  active: boolean;
+  gameRunning: boolean;
+  secondsUntil: number;
+  triggerSeconds: number;
+  basis: string;
+  lastFiredAt: number | null; // epoch ms of the last activation, or null
+}
+
 declare global {
   interface Window {
     __TRAILER_TV_START__?: () => void;
     __TRAILER_TV_STOP__?: () => void;
     __TRAILER_TV_ON_EXIT__?: () => void;
     __TRAILER_TV_IDLE_SECONDS__?: number;
+    __TRAILER_TV_STATUS__?: () => TrailerTvStatus;
   }
 }
 
@@ -40,6 +50,7 @@ declare global {
 function startIdleWatcher() {
   let lastActivity = Date.now();
   let active = false;
+  let lastFiredAt: number | null = null;
   let customIdleSeconds = 0;
   let fallbackSeconds = FALLBACK_IDLE_SECONDS;
   let dimBattery: number | null = null; // backlight dim seconds (from config.vdf)
@@ -91,6 +102,7 @@ function startIdleWatcher() {
       return;
     }
     active = true;
+    lastFiredAt = Date.now();
     const d = decideIdle(customIdleSeconds, fallbackSeconds, currentBacklightDim());
     logEvent("INFO", "screensaver activating", {
       trigger,
@@ -134,17 +146,24 @@ function startIdleWatcher() {
   const onDom = () => markActivity();
   domEvents.forEach((evt) => window.addEventListener(evt, onDom, true));
 
-  // Gamepad input is not delivered as DOM events in Game Mode, so poll it.
-  const gamepadPoll = window.setInterval(() => {
-    const pads = navigator.getGamepads?.() ?? [];
-    for (const pad of pads) {
-      if (!pad) continue;
-      if (pad.buttons.some((b) => b.pressed) || pad.axes.some((a) => Math.abs(a) > 0.5)) {
-        markActivity();
-        break;
-      }
-    }
-  }, GAMEPAD_POLL_MS);
+  // Controller input isn't DOM events and navigator.getGamepads() is dead in Game
+  // Mode, so use Steam's controller input signal to reset the idle clock.
+  const stopController = startControllerActivity(markActivity);
+
+  // Countdown status for the QAM (testing aid).
+  window.__TRAILER_TV_STATUS__ = () => {
+    const targetMs = idleMs();
+    const idleForMs = Date.now() - lastActivity;
+    const d = decideIdle(customIdleSeconds, fallbackSeconds, currentBacklightDim());
+    return {
+      active,
+      gameRunning: isGameRunning(),
+      secondsUntil: Math.max(0, Math.ceil((targetMs - idleForMs) / 1000)),
+      triggerSeconds: Math.round(targetMs / 1000),
+      basis: d.basis,
+      lastFiredAt,
+    };
+  };
 
   const tick = window.setInterval(() => {
     if (active) return;
@@ -161,13 +180,14 @@ function startIdleWatcher() {
 
   return () => {
     domEvents.forEach((evt) => window.removeEventListener(evt, onDom, true));
-    window.clearInterval(gamepadPoll);
+    stopController();
     window.clearInterval(tick);
     window.clearInterval(settingsPoll);
     stopPowerTracking();
     delete window.__TRAILER_TV_START__;
     delete window.__TRAILER_TV_STOP__;
     delete window.__TRAILER_TV_ON_EXIT__;
+    delete window.__TRAILER_TV_STATUS__;
   };
 }
 

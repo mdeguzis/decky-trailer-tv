@@ -51,6 +51,35 @@ export function isOnAC(): boolean {
 }
 
 /**
+ * Subscribe to Steam controller input (buttons/sticks) and call `onInput` on any.
+ * navigator.getGamepads() is dead in Game Mode's SharedJSContext, so this is the
+ * only reliable way to detect controller activity. Returns an unsubscribe fn.
+ */
+export function startControllerActivity(onInput: () => void): () => void {
+  const unsubs: Array<() => void> = [];
+  const reg = (fn: ((cb: (...a: any[]) => void) => any) | undefined) => {
+    try {
+      const handle = fn?.(() => onInput());
+      if (handle && typeof handle.unregister === "function") {
+        unsubs.push(() => {
+          try {
+            handle.unregister();
+          } catch {
+            /* ignore */
+          }
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+  reg(SteamClient.Input?.RegisterForControllerInputMessages?.bind(SteamClient.Input));
+  return () => {
+    for (const u of unsubs) u();
+  };
+}
+
+/**
  * True if a game/app is currently running. Trailer TV must never take over the
  * screen during gameplay. Uses the same SteamClient call decky-proton-pulse uses.
  */

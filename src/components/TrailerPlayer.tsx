@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Navigation } from "@decky/ui";
 import { getPlaylist, getSettings, logEvent } from "../lib/backend";
+import { startControllerActivity } from "../lib/steamPower";
 import type { Settings, TrailerClip } from "../lib/types";
 
 /** Advance a playlist cursor, wrapping at the end. Empty playlist -> 0. */
@@ -13,7 +14,6 @@ function nextIndex(current: number, length: number): number {
 // Ignore input for a moment after launch so the button/tap that started the
 // screensaver doesn't immediately dismiss it.
 const INPUT_GRACE_MS = 700;
-const GAMEPAD_POLL_MS = 120;
 
 export function TrailerPlayer() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -49,20 +49,13 @@ export function TrailerPlayer() {
     const onDom = (e: Event) => exit(e.type);
     domEvents.forEach((evt) => window.addEventListener(evt, onDom, true));
 
-    // Gamepad buttons/sticks are not DOM events in Game Mode -- poll them.
-    const gamepadPoll = window.setInterval(() => {
-      for (const pad of navigator.getGamepads?.() ?? []) {
-        if (!pad) continue;
-        if (pad.buttons.some((b) => b.pressed) || pad.axes.some((a) => Math.abs(a) > 0.5)) {
-          exit("gamepad");
-          break;
-        }
-      }
-    }, GAMEPAD_POLL_MS);
+    // Controller buttons/sticks aren't DOM events and getGamepads() is dead in
+    // Game Mode, so use Steam's controller input signal to dismiss.
+    const stopController = startControllerActivity(() => exit("controller"));
 
     return () => {
       domEvents.forEach((evt) => window.removeEventListener(evt, onDom, true));
-      window.clearInterval(gamepadPoll);
+      stopController();
       window.__TRAILER_TV_ON_EXIT__?.();
     };
   }, []);

@@ -19,6 +19,45 @@ const SOURCE_OPTIONS: { data: TrailerSource; label: string }[] = [
   { data: "random", label: "Random" },
 ];
 
+type Status = NonNullable<ReturnType<NonNullable<typeof window.__TRAILER_TV_STATUS__>>>;
+
+function formatLastFired(ms: number | null): string {
+  if (!ms) return "never";
+  const d = new Date(ms);
+  const utc = d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+  return `${utc} (${d.toLocaleTimeString()})`;
+}
+
+/** Live status panel, shown only when debug is enabled. Polls the watcher. */
+function DebugStats() {
+  const [status, setStatus] = useState<Status | null>(null);
+  useEffect(() => {
+    const tick = () => setStatus(window.__TRAILER_TV_STATUS__?.() ?? null);
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  if (!status) {
+    return <div style={{ fontSize: 12, color: "#888" }}>status unavailable</div>;
+  }
+  const state = status.active
+    ? "ACTIVE (playing)"
+    : status.gameRunning
+      ? "suppressed (game running)"
+      : "idle-watching";
+  return (
+    <div style={{ fontSize: 12, lineHeight: 1.6, color: "#ccc", fontFamily: "monospace" }}>
+      <div>state: {state}</div>
+      <div>
+        countdown: {status.active ? "-" : `${status.secondsUntil}s`} / {status.triggerSeconds}s
+        ({status.basis})
+      </div>
+      <div>last fired: {formatLastFired(status.lastFiredAt)}</div>
+    </div>
+  );
+}
+
 export function QamPanel() {
   const [settings, setLocal] = useState<Settings | null>(null);
   const [count, setCount] = useState<number | null>(null);
@@ -93,6 +132,19 @@ export function QamPanel() {
           Test
         </ButtonItem>
       </PanelSectionRow>
+      <PanelSectionRow>
+        <ToggleField
+          label="Debug"
+          description="Show live state, countdown, and last-fired time."
+          checked={settings.debug}
+          onChange={(v) => void update({ debug: v })}
+        />
+      </PanelSectionRow>
+      {settings.debug && (
+        <PanelSectionRow>
+          <DebugStats />
+        </PanelSectionRow>
+      )}
     </PanelSection>
   );
 }

@@ -12,4 +12,5 @@ export interface Settings {
   audio: boolean;
   idleSeconds: number;
   customIdleSeconds: number;
+  debug: boolean;
 }
