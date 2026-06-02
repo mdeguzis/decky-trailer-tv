@@ -39,6 +39,7 @@ export function TrailerPlayer() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const failuresRef = useRef(0);
+  const knownAppidsRef = useRef<Set<number>>(new Set());
 
   // Exit on ANY input, like a real idle/sleep screensaver -- regardless of how
   // it was launched (idle trigger or the QAM "Test" button). Notifies the idle
@@ -154,12 +155,14 @@ export function TrailerPlayer() {
     };
   }, [settings, strategy]);
 
-  // Load playlist + settings once on mount.
+  // Load playlist + settings on mount; the backend may return a partial list while
+  // the background fill is running, so we also poll to append new clips as they arrive.
   useEffect(() => {
     void (async () => {
       try {
         const [pl, s] = await Promise.all([getPlaylist(false), getSettings()]);
         setSettings(s);
+        pl.forEach((c) => knownAppidsRef.current.add(c.appid));
         setClips(pl);
         logEvent("INFO", "TrailerPlayer mounted", {
           source: s.source,
@@ -169,6 +172,24 @@ export function TrailerPlayer() {
         setLoading(false);
       }
     })();
+
+    // Poll every 20s and append any newly-built clips without disrupting playback.
+    const pollId = window.setInterval(() => {
+      void getPlaylist(false).then((pl) => {
+        setClips((prev) => {
+          const incoming = pl.filter((c) => !knownAppidsRef.current.has(c.appid));
+          if (incoming.length === 0) return prev;
+          incoming.forEach((c) => knownAppidsRef.current.add(c.appid));
+          logEvent("DEBUG", "playlist poll: appended clips", {
+            added: incoming.length,
+            total: prev.length + incoming.length,
+          });
+          return [...prev, ...incoming];
+        });
+      });
+    }, 20_000);
+
+    return () => window.clearInterval(pollId);
   }, []);
 
   const current = clips[index];
@@ -179,7 +200,27 @@ export function TrailerPlayer() {
     if (!video || !current) return;
 
     let hls: Hls | null = null;
-    const advance = () => setIndex((i) => nextIndex(i, clips.length));
+    const advance = () =>
+      setIndex((i) => {
+        const next = nextIndex(i, clips.length);
+        // Wrapped around to the start -- request a fresh batch so new items are
+        // appended before the player loops back to clips it already showed.
+        if (next === 0) {
+          void getPlaylist(true).then((pl) => {
+            setClips((prev) => {
+              const incoming = pl.filter((c) => !knownAppidsRef.current.has(c.appid));
+              if (incoming.length === 0) return prev;
+              incoming.forEach((c) => knownAppidsRef.current.add(c.appid));
+              logEvent("DEBUG", "playlist wrap: appended clips", {
+                added: incoming.length,
+                total: prev.length + incoming.length,
+              });
+              return [...prev, ...incoming];
+            });
+          });
+        }
+        return next;
+      });
 
     logEvent("DEBUG", "playing clip", {
       appid: current.appid,

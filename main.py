@@ -7,6 +7,7 @@ frontend hls.js player.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -21,7 +22,7 @@ if _PLUGIN_DIR not in sys.path:
 import decky  # type: ignore[import-untyped]  # pylint: disable=import-error
 from lib.backlight import read_backlight
 from lib.http_client import curl_json
-from lib.playlist import build_playlist
+from lib.playlist import get_candidate_appids, fetch_clip
 from lib.plugin_logging import log_frontend_event
 from lib.settings import load_settings, save_settings
 from lib.steam_config import read_dim_seconds, write_dim_seconds
@@ -45,6 +46,7 @@ class Plugin:
         self._playlist: list[dict[str, Any]] = []
         self._playlist_source: str = ""
         self._playlist_built_at: float = 0.0
+        self._playlist_building: bool = False
 
     async def _main(self) -> None:
         decky.logger.info("Trailer TV backend starting")
@@ -67,36 +69,68 @@ class Plugin:
         return updated
 
     async def get_playlist(self, force_refresh: bool = False) -> list[dict[str, Any]]:
-        """Return the cached playlist, rebuilding if stale, forced, or source changed."""
+        """Return current clips immediately; kick off a background build if stale or forced.
+
+        Returns whatever has been built so far so the player can start without waiting
+        for all clips to load. The frontend polls and appends new clips as they arrive.
+        """
         settings = load_settings(self._settings_path)
         source = settings.get("source", "popular")
         fresh = (time.time() - self._playlist_built_at) < PLAYLIST_TTL_SECONDS
         same_source = source == self._playlist_source
-        if self._playlist and fresh and same_source and not force_refresh:
+
+        if fresh and same_source and not force_refresh:
             decky.logger.debug(
-                "get_playlist: served cache | source=%s count=%d",
-                source, len(self._playlist),
+                "get_playlist: cache hit | source=%s count=%d building=%s",
+                source, len(self._playlist), self._playlist_building,
             )
             return self._playlist
-        return await self.refresh_playlist()
+
+        if not self._playlist_building:
+            await self.refresh_playlist()
+
+        return self._playlist
 
     async def refresh_playlist(self) -> list[dict[str, Any]]:
+        """Reset the playlist and start an async background fill; return immediately."""
+        if self._playlist_building:
+            decky.logger.debug("refresh_playlist: build already running, skipping")
+            return self._playlist
         settings = load_settings(self._settings_path)
         source = settings.get("source", "popular")
-        try:
-            clips = build_playlist(curl_json, source, limit=30)
-        except Exception as exc:  # noqa: BLE001
-            decky.logger.error(
-                "refresh_playlist failed | source=%s err=%s", source, exc
-            )
-            return self._playlist  # keep whatever we had
-        self._playlist = clips
+        self._playlist = []
         self._playlist_source = source
         self._playlist_built_at = time.time()
-        decky.logger.info(
-            "playlist refreshed | source=%s count=%d", source, len(clips)
-        )
-        return clips
+        asyncio.create_task(self._fill_playlist_bg(source))
+        decky.logger.info("refresh_playlist: background build started | source=%s", source)
+        return self._playlist
+
+    async def _fill_playlist_bg(self, source: str) -> None:
+        """Fetch every available candidate clip and append to self._playlist as each arrives."""
+        self._playlist_building = True
+        loop = asyncio.get_running_loop()
+        try:
+            appids = await loop.run_in_executor(None, get_candidate_appids, curl_json, source)
+            decky.logger.info("playlist_bg: got %d candidates | source=%s", len(appids), source)
+            for appid in appids:
+                try:
+                    clip = await loop.run_in_executor(None, fetch_clip, curl_json, appid)
+                except Exception as exc:  # noqa: BLE001
+                    decky.logger.debug("playlist_bg: fetch failed | appid=%d err=%s", appid, exc)
+                    continue
+                if clip:
+                    self._playlist.append(clip)
+                    decky.logger.debug(
+                        "playlist_bg: clip added | appid=%d name=%s count=%d",
+                        appid, clip.get("name"), len(self._playlist),
+                    )
+        except Exception as exc:  # noqa: BLE001
+            decky.logger.error("playlist_bg: fatal error | source=%s err=%s", source, exc)
+        finally:
+            self._playlist_building = False
+            decky.logger.info(
+                "playlist_bg: done | source=%s count=%d", source, len(self._playlist)
+            )
 
     async def get_dim_settings(self) -> dict[str, Any]:
         """Backlight-dim timeouts (seconds) from config.vdf; values may be None."""
