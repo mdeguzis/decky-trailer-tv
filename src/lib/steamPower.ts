@@ -133,6 +133,15 @@ export function startComputerActiveState(
   return () => {};
 }
 
+/** Re-assert the Steam brightness setting (0-1) to counter the idle backlight dim. */
+export function setSteamBrightness(level: number): void {
+  try {
+    SteamClient.System.Display?.SetBrightness?.(level);
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Subscribe to display brightness changes -- used to AUDIT whether SteamOS dims
  * the backlight while Trailer TV is active (it shouldn't, once keep-awake works).

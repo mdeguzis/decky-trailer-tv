@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Navigation } from "@decky/ui";
 import { getPlaylist, getSettings, getBacklight, logEvent } from "../lib/backend";
-import { startControllerActivity } from "../lib/steamPower";
+import { startControllerActivity, startBrightnessAudit, setSteamBrightness } from "../lib/steamPower";
 import type { Settings, TrailerClip } from "../lib/types";
 
 /** Advance a playlist cursor, wrapping at the end. Empty playlist -> 0. */
@@ -60,41 +60,48 @@ export function TrailerPlayer() {
     };
   }, []);
 
-  // AUDIT: poll the REAL hardware backlight (sysfs) to detect the idle dim --
-  // RegisterForBrightnessChanges is blind to it. A drop from the baseline while
-  // Trailer TV is on screen means SteamOS dimmed under us (issue #1).
+  // KEEP-AWAKE (backlight write-back): poll the real hardware backlight (sysfs)
+  // -- RegisterForBrightnessChanges is blind to the idle dim. When the backlight
+  // drops below baseline, re-assert the user's brightness setting to counter the
+  // dim. The brightness subscription captures the setting to restore to.
   useEffect(() => {
-    logEvent("INFO", "Trailer TV active -- backlight dim audit started", {});
-    let baseline: number | null = null;
-    let dimLogged = false;
+    logEvent("INFO", "Trailer TV active -- backlight keep-awake started", {});
+    let baselineRaw: number | null = null;
+    let savedBrightness: number | null = null;
     let cancelled = false;
+
+    // Capture the Steam brightness setting (0-1) to restore to.
+    const stopBrightness = startBrightnessAudit((data) => {
+      if (typeof data?.flBrightness === "number" && data.flBrightness > 0) {
+        savedBrightness = data.flBrightness;
+      }
+    });
 
     const poll = async () => {
       const bl = await getBacklight();
       if (cancelled || bl.raw === null) return;
-      if (baseline === null || bl.raw > baseline) {
-        baseline = bl.raw;
-        logEvent("INFO", "backlight baseline during Trailer TV", { raw: bl.raw, ratio: bl.ratio });
-        dimLogged = false;
+      if (baselineRaw === null || bl.raw > baselineRaw) {
+        baselineRaw = bl.raw;
         return;
       }
-      if (bl.raw < baseline * 0.9 && !dimLogged) {
-        dimLogged = true;
-        logEvent("WARNING", "DIM during Trailer TV (backlight dropped)", {
-          fromRaw: baseline,
+      if (bl.raw < baselineRaw * 0.9) {
+        logEvent("WARNING", "dim detected -- restoring backlight", {
+          fromRaw: baselineRaw,
           toRaw: bl.raw,
           ratio: bl.ratio,
-          path: bl.path,
+          savedBrightness,
         });
+        if (savedBrightness !== null) setSteamBrightness(savedBrightness);
       }
     };
 
     void poll();
-    const id = window.setInterval(() => void poll(), 2500);
+    const id = window.setInterval(() => void poll(), 1500);
     return () => {
       cancelled = true;
       window.clearInterval(id);
-      logEvent("INFO", "Trailer TV closed -- backlight dim audit stopped", {});
+      stopBrightness();
+      logEvent("INFO", "Trailer TV closed -- backlight keep-awake stopped", {});
     };
   }, []);
 
