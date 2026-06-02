@@ -13,6 +13,14 @@ export interface DimSettings {
 }
 export const getDimSettings = callable<[], DimSettings>("get_dim_settings");
 
+export interface Backlight {
+  raw: number | null;
+  max: number | null;
+  ratio: number | null;
+  path: string | null;
+}
+export const getBacklight = callable<[], Backlight>("get_backlight");
+
 const logEventBackend = callable<[level: string, message: string, context?: object], void>("log_event");
 
 /** Fire-and-forget structured log relayed to the Python logger. */

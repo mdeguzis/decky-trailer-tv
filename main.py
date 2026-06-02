@@ -18,6 +18,7 @@ if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
 import decky  # type: ignore[import-untyped]  # pylint: disable=import-error
+from lib.backlight import read_backlight
 from lib.http_client import curl_json
 from lib.playlist import build_playlist
 from lib.plugin_logging import log_frontend_event
@@ -95,6 +96,10 @@ class Plugin:
             dim.get("battery"), dim.get("ac"), dim.get("source"),
         )
         return dim
+
+    async def get_backlight(self) -> dict[str, Any]:
+        """Real hardware backlight from sysfs (detects the idle dim)."""
+        return read_backlight()
 
     async def log_event(
         self, level: str, message: str, context: dict[str, Any] | None = None

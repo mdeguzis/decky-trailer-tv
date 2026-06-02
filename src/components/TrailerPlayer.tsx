@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Navigation } from "@decky/ui";
-import { getPlaylist, getSettings, logEvent } from "../lib/backend";
-import { startControllerActivity, startBrightnessAudit } from "../lib/steamPower";
+import { getPlaylist, getSettings, getBacklight, logEvent } from "../lib/backend";
+import { startControllerActivity } from "../lib/steamPower";
 import type { Settings, TrailerClip } from "../lib/types";
 
 /** Advance a playlist cursor, wrapping at the end. Empty playlist -> 0. */
@@ -60,36 +60,41 @@ export function TrailerPlayer() {
     };
   }, []);
 
-  // AUDIT: a backlight brightness DROP while Trailer TV is on screen means SteamOS
-  // dimmed under us. The first callback is the baseline (current brightness), not a
-  // dim. Once keep-awake works there should be no drops.
+  // AUDIT: poll the REAL hardware backlight (sysfs) to detect the idle dim --
+  // RegisterForBrightnessChanges is blind to it. A drop from the baseline while
+  // Trailer TV is on screen means SteamOS dimmed under us (issue #1).
   useEffect(() => {
-    logEvent("INFO", "Trailer TV active -- dim audit started", {});
+    logEvent("INFO", "Trailer TV active -- backlight dim audit started", {});
     let baseline: number | null = null;
-    const stop = startBrightnessAudit((data) => {
-      const level = typeof data?.flBrightness === "number" ? data.flBrightness : null;
-      if (level === null) {
-        logEvent("INFO", "brightness change (unknown shape)", { data });
+    let dimLogged = false;
+    let cancelled = false;
+
+    const poll = async () => {
+      const bl = await getBacklight();
+      if (cancelled || bl.raw === null) return;
+      if (baseline === null || bl.raw > baseline) {
+        baseline = bl.raw;
+        logEvent("INFO", "backlight baseline during Trailer TV", { raw: bl.raw, ratio: bl.ratio });
+        dimLogged = false;
         return;
       }
-      if (baseline === null) {
-        baseline = level;
-        logEvent("INFO", "brightness baseline during Trailer TV", { level });
-        return;
-      }
-      if (level < baseline - 0.01) {
-        logEvent("WARNING", "DIM during Trailer TV (brightness dropped)", {
-          from: baseline,
-          to: level,
+      if (bl.raw < baseline * 0.9 && !dimLogged) {
+        dimLogged = true;
+        logEvent("WARNING", "DIM during Trailer TV (backlight dropped)", {
+          fromRaw: baseline,
+          toRaw: bl.raw,
+          ratio: bl.ratio,
+          path: bl.path,
         });
-      } else if (level > baseline + 0.01) {
-        logEvent("INFO", "brightness restored during Trailer TV", { from: baseline, to: level });
-        baseline = level;
       }
-    });
+    };
+
+    void poll();
+    const id = window.setInterval(() => void poll(), 2500);
     return () => {
-      stop();
-      logEvent("INFO", "Trailer TV closed -- dim audit stopped", {});
+      cancelled = true;
+      window.clearInterval(id);
+      logEvent("INFO", "Trailer TV closed -- backlight dim audit stopped", {});
     };
   }, []);
 
