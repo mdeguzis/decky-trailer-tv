@@ -207,6 +207,13 @@ get-logs:
 	@echo "Logs synced to: $(LOGS_DIR)"
 	@ls -1t $(LOGS_DIR)/*.log 2>/dev/null | head -5 | sed 's/^/  /' || true
 
+# Interactive JS console against the Deck's Game Mode UI (SharedJSContext).
+#   make steam-console DECK_IP=192.168.1.x              (REPL)
+#   make steam-console DECK_IP=192.168.1.x JS='<expr>'  (one-shot)
+steam-console:
+	$(call require_deck_ip)
+	@UV_CACHE_DIR=$(UV_CACHE_DIR) uv run python scripts/steam_console.py --deck-ip $(DECK_IP) --deck-user $(DECK_USER) --port 8081 $(if $(JS),--eval "$(JS)",)
+
 # Follow the Decky loader's systemd journal (backend stdout/exceptions).
 logs-loader:
 	@if [ -n "$(DECK_IP)" ]; then \
