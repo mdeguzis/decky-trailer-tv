@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-06-02
+
+### Fixed
+- QAM "View playlist" now opens Settings -> Trailer Playlist instead of launching
+  the player. The manual player launch is now a separate "Play now" button.
+- Synced the VERSION file and pyproject.toml to package.json (the packaged zip
+  was still named from a stale 0.3.0).
+
+### Changed
+- Removed the QAM "Refresh trailers" button; refresh now lives on the Trailer
+  Playlist tab.
+
 ## [0.5.0] - 2026-06-02
 
 ### Added

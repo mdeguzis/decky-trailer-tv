@@ -6,6 +6,7 @@ import { PlaylistTab } from "./tabs/PlaylistTab";
 import { HistoryTab } from "./tabs/HistoryTab";
 import { LogsTab } from "./tabs/LogsTab";
 import { AboutTab } from "./tabs/AboutTab";
+import { consumePendingSettingsTab } from "../lib/settingsNav";
 
 // SidebarNavigation expects route values to be full URL subpaths under our
 // registered route, NOT bare names -- otherwise Steam pushes /routes/<name> and
@@ -18,7 +19,9 @@ const routeToTab = (route: string) =>
   route.startsWith(`${ROUTE_PREFIX}/`) ? route.slice(ROUTE_PREFIX.length + 1) : route;
 
 export function SettingsPage() {
-  const [activePage, setActivePage] = useState("settings");
+  // Initial tab honors a deep-link set by the QAM (e.g. "View playlist"),
+  // otherwise lands on Settings.
+  const [activePage, setActivePage] = useState(() => consumePendingSettingsTab() ?? "settings");
 
   const pages: (SidebarNavigationPage | "separator")[] = [
     {
