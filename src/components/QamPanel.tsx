@@ -49,12 +49,16 @@ function DebugStats() {
       : status.gameRunning
         ? "suppressed (game running)"
         : "idle-watching";
+  const countdown = !status.enabled
+    ? "paused"
+    : status.active
+      ? "-"
+      : `${status.secondsUntil}s`;
   return (
     <div style={{ fontSize: 12, lineHeight: 1.6, color: "#ccc", fontFamily: "monospace" }}>
       <div>state: {state}</div>
       <div>
-        countdown: {status.active ? "-" : `${status.secondsUntil}s`} / {status.triggerSeconds}s
-        ({status.basis})
+        countdown: {countdown} / {status.triggerSeconds}s ({status.basis})
       </div>
       <div>last fired: {formatLastFired(status.lastFiredAt)}</div>
     </div>
@@ -158,8 +162,8 @@ export function QamPanel() {
       )}
       {/* Focusable bottom spacer: the QAM only scrolls to focusable elements, so
           this lets gamepad nav reach the end and reveals the debug stats above. */}
-      <Focusable style={{ height: 48 }}>
-        <div />
+      <Focusable style={{ height: 96 }}>
+        <div style={{ height: 96 }} />
       </Focusable>
     </PanelSection>
   );
