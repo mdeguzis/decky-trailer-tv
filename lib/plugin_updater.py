@@ -24,6 +24,7 @@ from .http_client import curl_download, curl_json
 GITHUB_REPO = "mdeguzis/decky-trailer-tv"
 _RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 _ALL_RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=10"
+_DEV_RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/developer"
 
 
 def _ver(v: str) -> tuple:
@@ -53,9 +54,16 @@ def check_for_update(current_version: str, channel: str = "release") -> dict[str
     channel values:
       "release"     - latest stable GitHub release (no prereleases)
       "pre-release" - latest GitHub release including prereleases
+      "developer"   - rolling developer tag (always considered newer)
     """
     try:
-        if channel == "pre-release":
+        if channel == "developer":
+            data = curl_json(
+                _DEV_RELEASE_URL,
+                headers=["Accept: application/vnd.github.v3+json"],
+                timeout=15,
+            )
+        elif channel == "pre-release":
             releases = curl_json(
                 _ALL_RELEASES_URL,
                 headers=["Accept: application/vnd.github.v3+json"],
@@ -79,7 +87,11 @@ def check_for_update(current_version: str, channel: str = "release") -> dict[str
         )
         zip_url: str | None = zip_asset["browser_download_url"] if zip_asset else None
         asset_size: int | None = zip_asset.get("size") if zip_asset else None
-        has_update = bool(latest and zip_url and _ver(latest) > _ver(current_version))
+        # Developer channel is a rolling tag - always offer install if asset exists
+        if channel == "developer":
+            has_update = bool(zip_url)
+        else:
+            has_update = bool(latest and zip_url and _ver(latest) > _ver(current_version))
         decky.logger.debug(
             "check_for_update: current=%s latest=%s has_update=%s channel=%s",
             current_version, latest, has_update, channel,

@@ -21,6 +21,7 @@ import type { UpdateCheckResult, UpdateStatus } from "../lib/backend";
 const CHANNEL_OPTIONS = [
   { data: "release", label: "Release" },
   { data: "pre-release", label: "Pre-release" },
+  { data: "developer", label: "Developer (rolling)" },
 ];
 
 const STORE_URL = (appid: number) => `https://store.steampowered.com/app/${appid}`;
@@ -87,7 +88,6 @@ function PlayedHistory() {
               }
               logEvent("DEBUG", "settings: open store page", { appid: entry.appid });
             }}
-            style={{ minWidth: 80, fontSize: 11, padding: "4px 8px" }}
           >
             Store
           </ButtonItem>
@@ -101,7 +101,7 @@ function PlayedHistory() {
 
 export function SettingsPage() {
   const [version, setVersion] = useState<string>("...");
-  const [channel, setChannel] = useState<"release" | "pre-release">("release");
+  const [channel, setChannel] = useState<"release" | "pre-release" | "developer">("release");
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<UpdateCheckResult | null>(null);
   const [installing, setInstalling] = useState(false);
@@ -185,10 +185,6 @@ export function SettingsPage() {
             Trailer TV &nbsp;&mdash;&nbsp; v{version}
           </div>
         </PanelSectionRow>
-      </PanelSection>
-
-      <PanelSection title="Played this session">
-        <PlayedHistory />
       </PanelSection>
 
       <PanelSection title="Updates">
@@ -275,6 +271,10 @@ export function SettingsPage() {
             </div>
           </PanelSectionRow>
         )}
+      </PanelSection>
+
+      <PanelSection title="Played this session">
+        <PlayedHistory />
       </PanelSection>
 
       {/* Bottom spacer so gamepad nav can reach the last item */}
