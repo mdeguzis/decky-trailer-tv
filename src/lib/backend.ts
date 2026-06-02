@@ -62,6 +62,7 @@ export const checkForUpdate = callable<[channel: string], UpdateCheckResult>("ch
 export const applyUpdate = callable<[zip_url: string, version: string], { ok: boolean; error?: string }>("apply_update");
 export const getUpdateStatus = callable<[], UpdateStatus>("get_update_status");
 export const cancelUpdate = callable<[], { ok: boolean }>("cancel_update");
+export const restartPluginLoader = callable<[], { ok: boolean }>("restart_plugin_loader");
 
 /** One release row for the release-notes carousel. */
 export interface ReleaseRow {
@@ -78,6 +79,9 @@ export const listReleases = callable<
   [limit: number, include_prereleases: boolean, channel: string],
   { success: boolean; releases: ReleaseRow[]; error?: string }
 >("list_releases");
+
+/** Tail of the plugin log file, for the in-plugin Logs tab. */
+export const getLogContents = callable<[], string>("get_log_contents");
 
 const logEventBackend = callable<[level: string, message: string, context?: object], void>("log_event");
 

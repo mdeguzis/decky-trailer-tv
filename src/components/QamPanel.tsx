@@ -187,15 +187,15 @@ export function QamPanel() {
               : "Refresh trailers"}
         </ButtonItem>
       </PanelSectionRow>
-      {/* Manual trigger pinned at the end of the list. */}
+      {/* Manual trigger: launches the player so you can watch the loaded trailers. */}
       <PanelSectionRow>
         <ButtonItem layout="below" onClick={() => Navigation.Navigate(ROUTE)}>
-          Test
+          View playlist
         </ButtonItem>
       </PanelSectionRow>
       <PanelSectionRow>
         <ButtonItem layout="below" onClick={() => Navigation.Navigate(SETTINGS_ROUTE)}>
-          View Playlist / Updates
+          Settings
         </ButtonItem>
       </PanelSectionRow>
       <PanelSectionRow>
@@ -227,9 +227,11 @@ export function QamPanel() {
         </PanelSectionRow>
       )}
       {/* Focusable bottom spacer: the QAM only scrolls to focusable elements, so
-          this lets gamepad nav reach the end and reveals the debug stats above. */}
-      <Focusable style={{ height: 96 }}>
-        <div style={{ height: 96 }} />
+          this lets gamepad nav reach the end and reveals the debug stats above.
+          Tall (220px) so touchscreen drag-scroll can bottom out well BELOW the
+          countdown/last-fired lines instead of cutting them off. */}
+      <Focusable style={{ height: 220 }}>
+        <div style={{ height: 220 }} />
       </Focusable>
     </PanelSection>
   );

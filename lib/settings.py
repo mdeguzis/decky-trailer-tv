@@ -13,6 +13,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "customIdleSeconds": 0,  # 0 = follow Steam's dim; else must be < Steam's dim
     "debug": False,          # show the live status/stats panel in the QAM
     "keepAwakeStrategy": "uinput",  # off | brightness | uinput
+    "updateChannel": "release",  # release | pre-release | developer (Settings tab)
 }
 
 

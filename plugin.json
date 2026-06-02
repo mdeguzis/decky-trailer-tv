@@ -1,7 +1,7 @@
 {
   "name": "Trailer TV",
   "author": "mdeguzis",
-  "flags": [],
+  "flags": ["root"],
   "api_version": 1,
   "publish": {
     "tags": ["screensaver", "trailers", "media"],

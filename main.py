@@ -24,7 +24,7 @@ import decky  # type: ignore[import-untyped]  # pylint: disable=import-error
 from lib.backlight import read_backlight
 from lib.http_client import curl_json
 from lib.playlist import get_candidate_appids, fetch_clip
-from lib.plugin_logging import log_frontend_event
+from lib.plugin_logging import get_log_contents as _get_log_contents, log_frontend_event
 from lib.plugin_updater import (
     check_for_update as _updater_check,
     list_releases as _updater_list_releases,
@@ -208,6 +208,31 @@ class Plugin:
         decky.logger.info("cancel_update: cancel signal sent")
         return {"ok": True}
 
+    async def restart_plugin_loader(self) -> dict[str, Any]:
+        """Restart the plugin_loader service so a freshly installed update loads.
+
+        Returns immediately; the restart fires ~1.5s later so the frontend can
+        show a spinner first. The service restart relaunches this Python backend
+        with the new files. Requires the 'root' plugin flag (see plugin.json).
+        """
+        import subprocess
+
+        def _do_restart() -> None:
+            time.sleep(1.5)
+            decky.logger.info("restart_plugin_loader: restarting plugin_loader service")
+            try:
+                subprocess.run(
+                    ["sudo", "-n", "/usr/bin/systemctl", "restart", "plugin_loader"],
+                    timeout=10,
+                    check=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                decky.logger.error("restart_plugin_loader: failed | err=%s", exc)
+
+        threading.Thread(target=_do_restart, daemon=True, name="tt-restart-loader").start()
+        decky.logger.info("restart_plugin_loader: restart scheduled in 1.5s")
+        return {"ok": True}
+
     async def get_dim_settings(self) -> dict[str, Any]:
         """Backlight-dim timeouts (seconds) from config.vdf; values may be None."""
         dim = read_dim_seconds()
@@ -263,3 +288,7 @@ class Plugin:
         self, level: str, message: str, context: dict[str, Any] | None = None
     ) -> None:
         log_frontend_event(level, message, context)
+
+    async def get_log_contents(self) -> str:
+        """Return the tail of the plugin log file for the in-plugin Logs tab."""
+        return _get_log_contents()

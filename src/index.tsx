@@ -237,7 +237,9 @@ function startIdleWatcher() {
 export default definePlugin(() => {
   logEvent("INFO", "plugin mounted", {});
   routerHook.addRoute(ROUTE, TrailerPlayer, { exact: true });
-  routerHook.addRoute(SETTINGS_ROUTE, SettingsPage, { exact: true });
+  // No `exact` so SidebarNavigation tab subpaths (/trailer-tv-settings/<tab>)
+  // still prefix-match this route and keep the host mounted.
+  routerHook.addRoute(SETTINGS_ROUTE, SettingsPage);
   const stopWatcher = startIdleWatcher();
 
   // Debug-only: spy on SteamClient calls to capture what the "dim after" slider invokes.

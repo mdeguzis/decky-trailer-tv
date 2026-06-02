@@ -1,5 +1,7 @@
 export type TrailerSource = "latest" | "popular" | "random";
 
+export type UpdateChannel = "release" | "pre-release" | "developer";
+
 // Keep-awake strategy to stop the OS dim/sleep during playback.
 export type KeepAwakeStrategy = "off" | "brightness" | "uinput" | "settings";
 
@@ -18,4 +20,5 @@ export interface Settings {
   customIdleSeconds: number;
   debug: boolean;
   keepAwakeStrategy: KeepAwakeStrategy;
+  updateChannel: UpdateChannel;
 }

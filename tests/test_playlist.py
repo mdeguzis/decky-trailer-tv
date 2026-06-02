@@ -72,10 +72,11 @@ def test_parse_trailer_returns_none_when_no_movies_or_no_hls():
     assert parse_trailer(_appdetails(62, [{"id": 1}], success=False), 62) is None
 
 
-def test_get_candidate_appids_pulls_from_source_bucket():
+def test_get_candidate_appids_primary_bucket_first_then_extras():
     featured = {
         "top_sellers": {"items": [{"id": 1}, {"id": 2}, {"id": 3}]},
-        "new_releases": {"items": [{"id": 99}]},
+        "new_releases": {"items": [{"id": 99}, {"id": 2}]},  # 2 dups across buckets
+        "specials": {"items": [{"id": 50}]},
     }
     captured = {}
 
@@ -83,8 +84,12 @@ def test_get_candidate_appids_pulls_from_source_bucket():
         captured["url"] = url
         return featured
 
-    # "popular" -> top_sellers only, order preserved.
-    assert get_candidate_appids(fake_fetch, "popular") == [1, 2, 3]
+    # "popular" keeps top_sellers FIRST, then appends the other buckets as extras
+    # (deduped, order preserved) so the rotation isn't tiny.
+    result = get_candidate_appids(fake_fetch, "popular")
+    assert result[:3] == [1, 2, 3]  # primary bucket first
+    assert 99 in result and 50 in result  # extras merged in
+    assert result.count(2) == 1  # deduped across buckets
     assert captured["url"] == FEATURED_URL
 
 

@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-02
+
+### Added
+- Left sidebar navigation (Settings, Trailer Playlist, Trailer History, Logs,
+  About) replacing the single scrolling settings page.
+- Trailer Playlist tab: ordered, numbered list of upcoming trailers with
+  thumbnails, a live count, a focusable Refresh button, and a Store link per row.
+  Polls continuously so it fills in place.
+- Logs tab with a full-screen scrollable log viewer (D-pad scroll + copy),
+  backed by a new get_log_contents backend reader.
+- About tab (version, description, GitHub/issue links).
+- Persisted update channel (survives reopening the page).
+
+### Fixed
+- Self-update install failing with "Plugin dir is root-owned": the plugin now
+  runs with the root flag, so it can replace its own files like it should.
+- Updates auto-reload the plugin on success (restart_plugin_loader) instead of
+  asking the user to restart Decky manually.
+- Playlist no longer loads only ~6 trailers: candidate app IDs now draw from the
+  source's primary featured bucket first, then the other buckets as extras.
+- Trailer History Store button no longer overflows the right edge.
+- Version labels route through formatVersion (no more "vDeveloper build (sha)").
+
+### Changed
+- QAM buttons relabeled: "Test" -> "View playlist", "View Playlist / Updates"
+  -> "Settings".
+
 ## [0.4.0] - 2026-06-02
 
 ### Added

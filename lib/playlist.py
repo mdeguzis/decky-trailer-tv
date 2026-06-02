@@ -15,13 +15,22 @@ FetchJson = Callable[[str], Any]
 
 
 def get_candidate_appids(fetch_json: FetchJson, source: str) -> list[int]:
-    """Fetch the featured page and return ordered/shuffled candidate app IDs."""
-    categories = buckets_for_source(source)
+    """Fetch the featured page and return ordered/shuffled candidate app IDs.
+
+    A single featured bucket (eg. top_sellers) only carries ~10 items, and after
+    filtering for games that actually have a trailer the playlist ends up tiny
+    (~6). So we keep the source's primary bucket(s) FIRST to preserve intent, then
+    append every other bucket as extras to enlarge the rotation. parse_featured_appids
+    dedupes while preserving this order.
+    """
     featured = fetch_json(FEATURED_URL)
-    appids = parse_featured_appids(featured, categories)
     if source == "random":
+        appids = parse_featured_appids(featured, ALL_BUCKETS)
         random.shuffle(appids)
-    return appids
+        return appids
+    primary = buckets_for_source(source)
+    ordered = primary + [b for b in ALL_BUCKETS if b not in primary]
+    return parse_featured_appids(featured, ordered)
 
 
 def fetch_clip(fetch_json: FetchJson, appid: int) -> dict[str, Any] | None:
@@ -36,6 +45,9 @@ SOURCE_BUCKETS: dict[str, list[str]] = {
     "popular": ["top_sellers"],
     "random": ["specials", "new_releases", "top_sellers", "coming_soon"],
 }
+# Every featured bucket, used to enlarge the candidate pool beyond a source's
+# primary bucket (see get_candidate_appids).
+ALL_BUCKETS = ["top_sellers", "new_releases", "specials", "coming_soon"]
 DEFAULT_SOURCE = "popular"
 
 
