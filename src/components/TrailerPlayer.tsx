@@ -18,7 +18,7 @@ import {
 } from "../lib/steamPower";
 import type { Settings, TrailerClip } from "../lib/types";
 
-const UINPUT_NUDGE_MS = 15000;
+const UINPUT_NUDGE_MS = 5000;
 
 /** Advance a playlist cursor, wrapping at the end. Empty playlist -> 0. */
 function nextIndex(current: number, length: number): number {
@@ -122,10 +122,15 @@ export function TrailerPlayer() {
     // uinput nudge loop.
     let nudgeId = 0;
     if (strategy === "uinput") {
+      let nudgeCount = 0;
       const nudge = async () => {
         suppressExitFor(700);
         const r = await nudgeInput();
-        logEvent("DEBUG", "uinput nudge", r);
+        nudgeCount += 1;
+        // Log first few + every 12th (~once/min) at INFO so we confirm it runs.
+        if (nudgeCount <= 3 || nudgeCount % 12 === 0) {
+          logEvent("INFO", "uinput nudge", { ...r, n: nudgeCount });
+        }
       };
       void nudge();
       nudgeId = window.setInterval(() => void nudge(), UINPUT_NUDGE_MS);

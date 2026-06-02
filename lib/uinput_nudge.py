@@ -65,10 +65,13 @@ class _Device:
         os.write(self.fd, struct.pack(_EVENT_FMT, 0, 0, etype, code, value))
 
     def jiggle(self) -> None:
-        """Net-zero 1px move: registers as activity without drifting the cursor."""
-        self._emit(EV_REL, REL_X, 1)
-        self._emit(EV_SYN, SYN_REPORT, 0)
-        self._emit(EV_REL, REL_X, -1)
+        """Emit ONE real 1px move, alternating direction so the cursor doesn't drift.
+
+        A combined +1/-1 in a single report nets zero and gamescope can coalesce it
+        away, so we move a real single pixel each call and flip the sign next time.
+        """
+        self._dir = -getattr(self, "_dir", -1)  # start at +1
+        self._emit(EV_REL, REL_X, self._dir)
         self._emit(EV_SYN, SYN_REPORT, 0)
 
     def close(self) -> None:
