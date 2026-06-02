@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Navigation } from "@decky/ui";
 import { getPlaylist, getSettings, getBacklight, logEvent } from "../lib/backend";
-import { startControllerActivity, startKeepAwake } from "../lib/steamPower";
+import { startControllerActivity } from "../lib/steamPower";
 import type { Settings, TrailerClip } from "../lib/types";
 
 /** Advance a playlist cursor, wrapping at the end. Empty playlist -> 0. */
@@ -98,12 +98,6 @@ export function TrailerPlayer() {
     };
   }, []);
 
-  // KEEP-AWAKE PROTOTYPE: nudge input while playing to try to prevent the dim.
-  // The backlight audit above tells us if it actually works.
-  useEffect(() => {
-    const stop = startKeepAwake((msg, ctx) => logEvent("DEBUG", msg, ctx));
-    return () => stop();
-  }, []);
 
   // Load playlist + settings once on mount.
   useEffect(() => {
