@@ -27,6 +27,7 @@ from lib.playlist import get_candidate_appids, fetch_clip
 from lib.plugin_logging import log_frontend_event
 from lib.plugin_updater import (
     check_for_update as _updater_check,
+    list_releases as _updater_list_releases,
     make_initial_status as _updater_make_status,
     start_apply_update as _updater_start,
 )
@@ -169,6 +170,20 @@ class Plugin:
         """Check GitHub Releases for a newer version; returns update info dict."""
         current = getattr(decky, "DECKY_PLUGIN_VERSION", "unknown")
         return _updater_check(current, channel=channel)
+
+    async def list_releases(
+        self,
+        limit: int = 10,
+        include_prereleases: bool = True,
+        channel: str = "release",
+    ) -> dict[str, Any]:
+        """Return releases (+ dev-tag history on the developer channel) for the
+        release-notes carousel."""
+        return _updater_list_releases(
+            limit=limit,
+            include_prereleases=include_prereleases,
+            channel=channel,
+        )
 
     async def apply_update(self, zip_url: str, version: str) -> dict[str, Any]:
         """Start a background download-and-install; poll get_update_status() for progress."""

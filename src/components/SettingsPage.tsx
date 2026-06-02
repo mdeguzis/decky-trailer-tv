@@ -17,6 +17,7 @@ import {
   logEvent,
 } from "../lib/backend";
 import type { UpdateCheckResult, UpdateStatus } from "../lib/backend";
+import { showReleaseNotesModal } from "./ReleaseNotesModal";
 
 const CHANNEL_OPTIONS = [
   { data: "release", label: "Release" },
@@ -170,6 +171,28 @@ export function SettingsPage() {
     setInstalling(false);
   };
 
+  // Open the release-notes carousel. When a fresh check found an update, seed
+  // it with that release so its notes show first; otherwise the modal loads the
+  // recent history for the selected channel.
+  const openReleaseNotes = () => {
+    if (checkResult?.success && checkResult.has_update && checkResult.release_notes) {
+      showReleaseNotesModal({
+        channel,
+        initial: {
+          version: checkResult.latest_version ?? "",
+          body: checkResult.release_notes ?? "",
+          releaseUrl: checkResult.release_url,
+          publishedAt: checkResult.published_at,
+          isPrerelease: channel === "pre-release",
+          isDeveloper: channel === "developer",
+        },
+      });
+    } else {
+      showReleaseNotesModal({ channel });
+    }
+    logEvent("INFO", "release notes opened", { channel, seeded: !!checkResult?.has_update });
+  };
+
   const progressPct =
     status?.progress_fraction != null
       ? Math.round(status.progress_fraction * 100)
@@ -194,7 +217,7 @@ export function SettingsPage() {
             rgOptions={CHANNEL_OPTIONS.map((o) => ({ data: o.data, label: o.label }))}
             selectedOption={channel}
             onChange={(o) => {
-              setChannel(o.data as "release" | "pre-release");
+              setChannel(o.data as "release" | "pre-release" | "developer");
               setCheckResult(null);
             }}
           />
@@ -203,6 +226,12 @@ export function SettingsPage() {
         <PanelSectionRow>
           <ButtonItem layout="below" disabled={checking || installing} onClick={() => void handleCheck()}>
             {checking ? "Checking..." : "Check for updates"}
+          </ButtonItem>
+        </PanelSectionRow>
+
+        <PanelSectionRow>
+          <ButtonItem layout="below" disabled={installing} onClick={openReleaseNotes}>
+            View release notes
           </ButtonItem>
         </PanelSectionRow>
 

@@ -63,6 +63,22 @@ export const applyUpdate = callable<[zip_url: string, version: string], { ok: bo
 export const getUpdateStatus = callable<[], UpdateStatus>("get_update_status");
 export const cancelUpdate = callable<[], { ok: boolean }>("cancel_update");
 
+/** One release row for the release-notes carousel. */
+export interface ReleaseRow {
+  version: string;
+  name: string;
+  body: string;
+  published_at: string;
+  prerelease: boolean;
+  developer?: boolean;
+  html_url: string;
+}
+
+export const listReleases = callable<
+  [limit: number, include_prereleases: boolean, channel: string],
+  { success: boolean; releases: ReleaseRow[]; error?: string }
+>("list_releases");
+
 const logEventBackend = callable<[level: string, message: string, context?: object], void>("log_event");
 
 /** Fire-and-forget structured log relayed to the Python logger. */

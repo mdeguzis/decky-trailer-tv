@@ -130,6 +130,136 @@ def check_for_update(current_version: str, channel: str = "release") -> dict[str
         return {"success": False, "error": str(exc), "current_version": current_version}
 
 
+def list_releases(
+    limit: int = 10,
+    include_prereleases: bool = True,
+    channel: str = "release",
+) -> dict[str, Any]:
+    """Return releases for the release-notes carousel.
+
+    Output shape per entry: version, name, body (markdown), published_at,
+    prerelease flag, developer flag, html_url.
+
+    channel="developer" merges per-build dev tags (from list_dev_tags) at the
+    top, then real GitHub Releases. The rolling 'developer' Release is always
+    filtered out of the history (dev tags replace it as per-build history). Any
+    other channel returns only real Releases.
+    """
+    try:
+        raw = curl_json(
+            _ALL_RELEASES_URL,
+            headers=["Accept: application/vnd.github.v3+json"],
+            timeout=15,
+        )
+        out: list[dict[str, Any]] = []
+        if channel == "developer":
+            dev_half = max(1, limit // 2)
+            dev_tags = list_dev_tags(limit=dev_half).get("releases", [])
+            out.extend(dev_tags)
+        for r in raw:
+            tag = str(r.get("tag_name", "") or "")
+            if tag == "developer":
+                # Rolling Release is the updater's download source, never history.
+                continue
+            is_pre = bool(r.get("prerelease"))
+            if is_pre and not include_prereleases:
+                continue
+            out.append(
+                {
+                    "version": tag.lstrip("v"),
+                    "name": str(r.get("name", "") or tag),
+                    "body": str(r.get("body", "") or ""),
+                    "published_at": str(r.get("published_at", "") or ""),
+                    "prerelease": is_pre,
+                    "developer": False,
+                    "html_url": str(r.get("html_url", "") or ""),
+                }
+            )
+            if len(out) >= limit:
+                break
+        decky.logger.debug(
+            "list_releases: ok | channel=%s returned=%d", channel, len(out[:limit])
+        )
+        return {"success": True, "releases": out[:limit]}
+    except Exception as exc:
+        decky.logger.error("list_releases: failed | channel=%s err=%s", channel, exc)
+        return {"success": False, "error": str(exc), "releases": []}
+
+
+def list_dev_tags(limit: int = 5) -> dict[str, Any]:
+    """Return the N most recent dev-history tags (dev-<version>-<sha>).
+
+    Persistent git tags created by `make github-dev-release`, outside the
+    GitHub Releases page. Each annotated tag's message holds the same notes the
+    rolling 'developer' Release carries, so the carousel can show dev build
+    history without polluting the public releases page. Falls back to the commit
+    subject when a tag is lightweight or its annotation fetch fails.
+    """
+    try:
+        refs = curl_json(
+            f"https://api.github.com/repos/{GITHUB_REPO}/git/matching-refs/tags/dev-",
+            headers=["Accept: application/vnd.github.v3+json"],
+            timeout=15,
+        )
+        if not isinstance(refs, list):
+            return {"success": True, "releases": []}
+        # Newest tags come last in git ref order; reverse so the carousel's
+        # first card is the most recent dev build.
+        refs = list(reversed(refs))[:limit]
+        out: list[dict[str, Any]] = []
+        for ref in refs:
+            ref_name = str(ref.get("ref", ""))
+            tag_short = ref_name.removeprefix("refs/tags/")
+            obj = ref.get("object", {}) or {}
+            obj_sha = str(obj.get("sha", ""))
+            obj_type = str(obj.get("type", ""))
+            if not obj_sha:
+                continue
+            message = ""
+            tagger_date = ""
+            if obj_type == "tag":
+                try:
+                    tag_obj = curl_json(
+                        f"https://api.github.com/repos/{GITHUB_REPO}/git/tags/{obj_sha}",
+                        headers=["Accept: application/vnd.github.v3+json"],
+                        timeout=10,
+                    )
+                    message = str(tag_obj.get("message", "") or "")
+                    tagger_date = str(tag_obj.get("tagger", {}).get("date", "") or "")
+                except Exception as inner:
+                    decky.logger.warning(
+                        "list_dev_tags: tag obj fetch failed | tag=%s err=%s", tag_short, inner
+                    )
+            if not message:
+                try:
+                    commit = curl_json(
+                        f"https://api.github.com/repos/{GITHUB_REPO}/commits/{obj_sha}",
+                        headers=["Accept: application/vnd.github.v3+json"],
+                        timeout=10,
+                    )
+                    message = str(commit.get("commit", {}).get("message", "") or "")
+                    tagger_date = tagger_date or str(
+                        commit.get("commit", {}).get("author", {}).get("date", "") or ""
+                    )
+                except Exception:
+                    pass
+            out.append(
+                {
+                    "version": tag_short.removeprefix("dev-"),
+                    "name": tag_short,
+                    "body": message,
+                    "published_at": tagger_date,
+                    "prerelease": False,
+                    "developer": True,
+                    "html_url": f"https://github.com/{GITHUB_REPO}/releases/tag/{tag_short}",
+                }
+            )
+        return {"success": True, "releases": out}
+    except Exception as exc:
+        decky.logger.error("list_dev_tags: failed | err=%s", exc)
+        return {"success": False, "error": str(exc), "releases": []}
+
+
 def start_apply_update(
     zip_url: str,
     version: str,
