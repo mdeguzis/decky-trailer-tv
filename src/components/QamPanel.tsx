@@ -176,6 +176,7 @@ export function QamPanel() {
           <DropdownItem
             label="Keep-awake"
             rgOptions={[
+              { data: "settings", label: "settings (dim timeout)" },
               { data: "uinput", label: "uinput (real input)" },
               { data: "brightness", label: "brightness write-back" },
               { data: "off", label: "off (audit only)" },

@@ -7,6 +7,8 @@ import {
   getBacklight,
   nudgeInput,
   stopKeepAwake,
+  disableDim,
+  restoreDim,
   logEvent,
 } from "../lib/backend";
 import {
@@ -119,6 +121,11 @@ export function TrailerPlayer() {
     void poll();
     const auditId = window.setInterval(() => void poll(), 1500);
 
+    // settings route: raise the dim timeout so gamescope never dims.
+    if (strategy === "settings") {
+      void disableDim().then((r) => logEvent("INFO", "disable_dim", r as object));
+    }
+
     // uinput nudge loop.
     let nudgeId = 0;
     if (strategy === "uinput") {
@@ -142,6 +149,7 @@ export function TrailerPlayer() {
       if (nudgeId) window.clearInterval(nudgeId);
       stopBrightness();
       if (strategy === "uinput") void stopKeepAwake();
+      if (strategy === "settings") void restoreDim().then((r) => logEvent("INFO", "restore_dim", r as object));
       logEvent("INFO", "keep-awake stopped", { strategy });
     };
   }, [settings, strategy]);

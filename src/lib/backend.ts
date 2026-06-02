@@ -23,6 +23,8 @@ export const getBacklight = callable<[], Backlight>("get_backlight");
 
 export const nudgeInput = callable<[], { ok: boolean; error?: string }>("nudge_input");
 export const stopKeepAwake = callable<[], void>("stop_keep_awake");
+export const disableDim = callable<[], { ok: boolean; previous?: unknown; error?: string }>("disable_dim");
+export const restoreDim = callable<[], { ok: boolean }>("restore_dim");
 
 const logEventBackend = callable<[level: string, message: string, context?: object], void>("log_event");
 

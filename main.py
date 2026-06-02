@@ -7,6 +7,7 @@ frontend hls.js player.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -23,7 +24,10 @@ from lib.http_client import curl_json
 from lib.playlist import build_playlist
 from lib.plugin_logging import log_frontend_event
 from lib.settings import load_settings, save_settings
-from lib.steam_config import read_dim_seconds
+from lib.steam_config import read_dim_seconds, write_dim_seconds
+
+# A value large enough that gamescope effectively never dims while active.
+_DIM_DISABLED_SECONDS = 86400
 
 PLAYLIST_TTL_SECONDS = 6 * 60 * 60
 
@@ -34,14 +38,20 @@ class Plugin:
     def __init__(self) -> None:
         runtime = Path(decky.DECKY_PLUGIN_RUNTIME_DIR)
         runtime.mkdir(parents=True, exist_ok=True)
+        self._runtime = runtime
         self._settings_path = runtime / "settings.json"
         self._playlist_path = runtime / "playlist.json"
+        self._dim_backup_path = runtime / "dim_backup.json"
         self._playlist: list[dict[str, Any]] = []
         self._playlist_source: str = ""
         self._playlist_built_at: float = 0.0
 
     async def _main(self) -> None:
         decky.logger.info("Trailer TV backend starting")
+        # Crash recovery: if a backup exists, we exited while the dim was disabled.
+        if self._dim_backup_path.exists():
+            decky.logger.warning("dim backup found on start -- restoring user's dim settings")
+            await self.restore_dim()
 
     async def _unload(self) -> None:
         decky.logger.info("Trailer TV backend unloading")
@@ -100,6 +110,31 @@ class Plugin:
     async def get_backlight(self) -> dict[str, Any]:
         """Real hardware backlight from sysfs (detects the idle dim)."""
         return read_backlight()
+
+    async def disable_dim(self) -> dict[str, Any]:
+        """Raise the backlight-dim timeout so gamescope won't dim while active.
+
+        Backs up the user's original values to disk first (crash-safe restore).
+        If a backup already exists we're already disabled -- leave it alone.
+        """
+        if not self._dim_backup_path.exists():
+            current = read_dim_seconds()
+            self._dim_backup_path.write_text(
+                json.dumps({"battery": current.get("battery"), "ac": current.get("ac")})
+            )
+        result = write_dim_seconds(_DIM_DISABLED_SECONDS, _DIM_DISABLED_SECONDS)
+        decky.logger.info("disable_dim | ok=%s prev=%s", result.get("ok"), result.get("previous"))
+        return result
+
+    async def restore_dim(self) -> dict[str, Any]:
+        """Restore the user's original backlight-dim timeouts and clear the backup."""
+        if not self._dim_backup_path.exists():
+            return {"ok": True, "noop": True}
+        saved = json.loads(self._dim_backup_path.read_text())
+        result = write_dim_seconds(saved.get("battery"), saved.get("ac"))
+        self._dim_backup_path.unlink(missing_ok=True)
+        decky.logger.info("restore_dim | ok=%s restored=%s", result.get("ok"), saved)
+        return result
 
     async def nudge_input(self) -> dict[str, Any]:
         """Emit a real input event via uinput to reset gamescope's idle timer."""

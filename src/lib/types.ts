@@ -1,7 +1,7 @@
 export type TrailerSource = "latest" | "popular" | "random";
 
 // Keep-awake strategy to stop the OS dim/sleep during playback.
-export type KeepAwakeStrategy = "off" | "brightness" | "uinput";
+export type KeepAwakeStrategy = "off" | "brightness" | "uinput" | "settings";
 
 export interface TrailerClip {
   appid: number;

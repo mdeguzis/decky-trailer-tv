@@ -57,3 +57,27 @@ def read_dim_seconds() -> dict[str, int | None | str]:
     result: dict[str, int | None | str] = dict(parse_dim_seconds(text))
     result["source"] = str(path)
     return result
+
+
+def _set_value(text: str, key: str, value: int) -> str:
+    """Replace the numeric value of a VDF "key" "value" pair, preserving whitespace."""
+    pattern = re.compile(r'("' + re.escape(key) + r'"\s+")\d+(")')
+    return pattern.sub(r"\g<1>" + str(value) + r"\g<2>", text, count=1)
+
+
+def write_dim_seconds(battery: int | None, ac: int | None) -> dict[str, object]:
+    """Set IdleBacklightDim{Battery,AC}Seconds in config.vdf. Returns prev + ok."""
+    path = find_config_vdf()
+    if path is None:
+        return {"ok": False, "error": "config.vdf not found"}
+    try:
+        text = path.read_text(errors="ignore")
+        previous = parse_dim_seconds(text)
+        if battery is not None and previous["battery"] is not None:
+            text = _set_value(text, "IdleBacklightDimBatterySeconds", battery)
+        if ac is not None and previous["ac"] is not None:
+            text = _set_value(text, "IdleBacklightDimACSeconds", ac)
+        path.write_text(text)
+        return {"ok": True, "previous": previous}
+    except OSError as exc:
+        return {"ok": False, "error": str(exc)}
