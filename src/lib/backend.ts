@@ -26,6 +26,10 @@ export const stopKeepAwake = callable<[], void>("stop_keep_awake");
 export const disableDim = callable<[], { ok: boolean; previous?: unknown; error?: string }>("disable_dim");
 export const restoreDim = callable<[], { ok: boolean }>("restore_dim");
 
+export const isPlaylistBuilding = callable<[], boolean>("is_playlist_building");
+export const getPlaylistCount = callable<[], number>("get_playlist_count");
+export const recordPlayedClip = callable<[appid: number, name: string], void>("record_played_clip");
+export const getPlayedHistory = callable<[], { appid: number; name: string }[]>("get_played_history");
 export const getPluginVersion = callable<[], string>("get_plugin_version");
 
 export interface UpdateCheckResult {

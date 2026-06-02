@@ -56,6 +56,7 @@ class Plugin:
         self._update_status: dict[str, Any] = _updater_make_status()
         self._update_lock = threading.Lock()
         self._update_cancel = threading.Event()
+        self._played_history: list[dict[str, Any]] = []
 
     async def _main(self) -> None:
         decky.logger.info("Trailer TV backend starting")
@@ -114,6 +115,14 @@ class Plugin:
         decky.logger.info("refresh_playlist: background build started | source=%s", source)
         return self._playlist
 
+    async def is_playlist_building(self) -> bool:
+        """Return True while the background playlist fill is still running."""
+        return self._playlist_building
+
+    async def get_playlist_count(self) -> int:
+        """Return the number of clips built so far (useful for live refresh progress)."""
+        return len(self._playlist)
+
     async def _fill_playlist_bg(self, source: str) -> None:
         """Fetch every available candidate clip and append to self._playlist as each arrives."""
         self._playlist_building = True
@@ -140,6 +149,17 @@ class Plugin:
             decky.logger.info(
                 "playlist_bg: done | source=%s count=%d", source, len(self._playlist)
             )
+
+    async def record_played_clip(self, appid: int, name: str) -> None:
+        """Record a clip as played; keeps most recent at index 0, no duplicates."""
+        self._played_history = [e for e in self._played_history if e["appid"] != appid]
+        self._played_history.insert(0, {"appid": appid, "name": name})
+        self._played_history = self._played_history[:100]
+        decky.logger.debug("record_played_clip | appid=%d name=%s total=%d", appid, name, len(self._played_history))
+
+    async def get_played_history(self) -> list[dict[str, Any]]:
+        """Return played clips most-recent-first."""
+        return list(self._played_history)
 
     async def get_plugin_version(self) -> str:
         """Return the version string Decky knows about."""

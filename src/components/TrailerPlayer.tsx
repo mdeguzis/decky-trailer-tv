@@ -9,6 +9,7 @@ import {
   stopKeepAwake,
   disableDim,
   restoreDim,
+  recordPlayedClip,
   logEvent,
 } from "../lib/backend";
 import {
@@ -229,6 +230,7 @@ export function TrailerPlayer() {
       total: clips.length,
       engine: Hls.isSupported() ? "hls.js" : "native",
     });
+    void recordPlayedClip(current.appid, current.name);
 
     const onError = (reason: string) => {
       failuresRef.current += 1;

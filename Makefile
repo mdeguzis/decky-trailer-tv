@@ -28,6 +28,15 @@ endif
 
 DECK_HOST  ?= $(DECK_IP)
 PLUGIN_NAME := decky-trailer-tv
+
+# Pass DRY_RUN=false on the command line to actually publish releases.
+# Default is dry-run so accidental `make github-release` doesn't publish.
+DRY_RUN ?= true
+ifeq ($(DRY_RUN),false)
+  _DRY_RUN_FLAG := --no-dry-run
+else
+  _DRY_RUN_FLAG := --dry-run
+endif
 TARGET     ?= stable
 SCREENSHOT_DIR ?= $(HOME)/storage/screenshots
 # find pnpm: check mise path, then PATH, then npx fallback
@@ -53,6 +62,7 @@ endif
 export UV_CACHE_DIR
 
 .PHONY: default help build watch test test-ts test-py typecheck package \
+        github-release github-pre-release github-dev-release \
         deploy deploy-reload clean logs get-cef-capture take-screenshot reload
 
 default: build
@@ -79,6 +89,9 @@ help:
 	@printf "  %-27s %s\n" "test-py" "Run Python tests only (pytest)"
 	@printf "  %-27s %s\n" "typecheck" "Run tsc --noEmit"
 	@printf "  %-27s %s\n" "package" "Build and create release zip"
+	@printf "  %-27s %s\n" "github-release" "Create a stable GitHub release (--no-dry-run to publish)"
+	@printf "  %-27s %s\n" "github-pre-release" "Create a GitHub pre-release (--no-dry-run to publish)"
+	@printf "  %-27s %s\n" "github-dev-release" "Refresh the rolling developer tag + release with HEAD"
 	@printf "  %-27s %s\n" "deploy" "Build and deploy to Steam Deck (requires DECK_IP)"
 	@printf "  %-27s %s\n" "deploy-reload" "Deploy then restart plugin_loader"
 	@printf "  %-27s %s\n" "clean" "Remove build output (dist/) and release archives"
@@ -126,6 +139,15 @@ package: build
 	echo "Packaging $$ZIP ..."; \
 	zip -r "$$ZIP" dist/ main.py plugin.json package.json lib/ -x "lib/__pycache__/*"; \
 	echo "Created $$ZIP"
+
+github-release: package
+	bash scripts/deploy.sh --skip-build --github-release $(_DRY_RUN_FLAG)
+
+github-pre-release: package
+	bash scripts/deploy.sh --skip-build --github-prerelease $(_DRY_RUN_FLAG)
+
+github-dev-release: package
+	bash scripts/deploy.sh --skip-build --github-dev-release --no-dry-run
 
 # ─── On-device helpers ─────────────────────────────────────────────────────────
 

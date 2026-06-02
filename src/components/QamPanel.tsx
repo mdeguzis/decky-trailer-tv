@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Navigation,
   PanelSection,
@@ -9,7 +9,10 @@ import {
   SliderField,
   Focusable,
 } from "@decky/ui";
-import { getSettings, setSettings, refreshPlaylist } from "../lib/backend";
+import {
+  getSettings, setSettings, refreshPlaylist,
+  isPlaylistBuilding, getPlaylistCount, logEvent,
+} from "../lib/backend";
 import type { Settings, TrailerSource, KeepAwakeStrategy } from "../lib/types";
 
 const ROUTE = "/trailer-tv";
@@ -82,28 +85,52 @@ function DebugStats() {
 
 export function QamPanel() {
   const [settings, setLocal] = useState<Settings | null>(null);
-  const [count, setCount] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [liveCount, setLiveCount] = useState<number | null>(null);
+  const [refreshDone, setRefreshDone] = useState(false);
+  const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
     void getSettings().then(setLocal);
   }, []);
 
+  const stopPoll = () => {
+    if (pollRef.current !== null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  useEffect(() => () => stopPoll(), []);
+
   const update = async (partial: Partial<Settings>) => {
     const next = await setSettings(partial);
     setLocal(next);
-    // Push the change to the running watcher immediately so debug/state reflect it.
     window.__TRAILER_TV_RELOAD__?.();
   };
 
   const refresh = async () => {
+    stopPoll();
     setRefreshing(true);
-    try {
-      const pl = await refreshPlaylist();
-      setCount(pl.length);
-    } finally {
-      setRefreshing(false);
-    }
+    setRefreshDone(false);
+    setLiveCount(null);
+    logEvent("INFO", "qam: refresh trailers clicked", {});
+    await refreshPlaylist();
+
+    // Poll until the background build finishes, updating the live count each tick.
+    pollRef.current = window.setInterval(() => {
+      void Promise.all([isPlaylistBuilding(), getPlaylistCount()]).then(([building, n]) => {
+        setLiveCount(n);
+        if (!building) {
+          stopPoll();
+          setRefreshing(false);
+          setRefreshDone(true);
+          logEvent("INFO", "qam: refresh complete", { count: n });
+          // Clear the success state after 4s so the button returns to normal.
+          window.setTimeout(() => setRefreshDone(false), 4000);
+        }
+      });
+    }, 1500);
   };
 
   if (!settings) {
@@ -152,10 +179,12 @@ export function QamPanel() {
         />
       </PanelSectionRow>
       <PanelSectionRow>
-        <ButtonItem layout="below" disabled={refreshing} onClick={refresh}>
+        <ButtonItem layout="below" disabled={refreshing} onClick={() => void refresh()}>
           {refreshing
-            ? "Refreshing..."
-            : `Refresh trailers${count !== null ? ` (${count})` : ""}`}
+            ? `Refreshing...${liveCount !== null && liveCount > 0 ? ` (${liveCount})` : ""}`
+            : refreshDone
+              ? `Loaded ${liveCount ?? 0} trailers`
+              : "Refresh trailers"}
         </ButtonItem>
       </PanelSectionRow>
       {/* Manual trigger pinned at the end of the list. */}
@@ -166,7 +195,7 @@ export function QamPanel() {
       </PanelSectionRow>
       <PanelSectionRow>
         <ButtonItem layout="below" onClick={() => Navigation.Navigate(SETTINGS_ROUTE)}>
-          Settings / Updates
+          View Playlist / Updates
         </ButtonItem>
       </PanelSectionRow>
       <PanelSectionRow>
