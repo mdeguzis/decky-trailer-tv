@@ -3,13 +3,14 @@ import { staticClasses, Navigation } from "@decky/ui";
 import { FaTv } from "react-icons/fa";
 import { TrailerPlayer } from "./components/TrailerPlayer";
 import { QamPanel } from "./components/QamPanel";
-import { getSettings, logEvent } from "./lib/backend";
+import { getSettings, getDimSettings, logEvent } from "./lib/backend";
 import {
   startPowerTracking,
   stopPowerTracking,
   computeIdleSeconds,
   decideIdle,
   isGameRunning,
+  isOnAC,
 } from "./lib/steamPower";
 
 const ROUTE = "/trailer-tv";
@@ -41,27 +42,35 @@ function startIdleWatcher() {
   let active = false;
   let customIdleSeconds = 0;
   let fallbackSeconds = FALLBACK_IDLE_SECONDS;
+  let dimBattery: number | null = null; // backlight dim seconds (from config.vdf)
+  let dimAc: number | null = null;
   let lastLoggedIdle = -1;
+
+  // Backlight-dim seconds for the current power source.
+  const currentBacklightDim = () => (isOnAC() ? dimAc : dimBattery);
 
   // Log the active trigger threshold whenever it changes, so the logs show how
   // long until the screensaver fires without spamming every tick.
   const logIdleIfChanged = () => {
-    const d = decideIdle(customIdleSeconds, fallbackSeconds);
+    const d = decideIdle(customIdleSeconds, fallbackSeconds, currentBacklightDim());
     if (d.seconds !== lastLoggedIdle) {
       lastLoggedIdle = d.seconds;
       logEvent("INFO", "idle trigger armed", {
         triggerSeconds: d.seconds,
         basis: d.basis,
         onAC: d.onAC,
+        backlightDim: currentBacklightDim(),
       });
     }
   };
 
   const loadIdle = () =>
-    void getSettings()
-      .then((s) => {
+    void Promise.all([getSettings(), getDimSettings()])
+      .then(([s, dim]) => {
         customIdleSeconds = s.customIdleSeconds ?? 0;
         fallbackSeconds = s.idleSeconds ?? FALLBACK_IDLE_SECONDS;
+        dimBattery = dim.battery;
+        dimAc = dim.ac;
         logIdleIfChanged();
       })
       .catch((e) => logEvent("WARNING", "idle settings load failed", { reason: String(e) }));
@@ -69,11 +78,11 @@ function startIdleWatcher() {
   startPowerTracking();
   logEvent("INFO", "idle watcher started", { fallbackSeconds: FALLBACK_IDLE_SECONDS });
 
-  // Fire right before Steam's dim timeout (or a custom override). A live CEF
-  // console value still wins, for testing.
+  // Fire right before the first idle action (backlight dim / screen off / suspend),
+  // or a custom override. A live CEF console value still wins, for testing.
   const idleMs = () =>
     (window.__TRAILER_TV_IDLE_SECONDS__ ??
-      computeIdleSeconds(customIdleSeconds, fallbackSeconds)) * 1000;
+      computeIdleSeconds(customIdleSeconds, fallbackSeconds, currentBacklightDim())) * 1000;
 
   const start = (trigger: string) => {
     if (active) return;
@@ -82,7 +91,7 @@ function startIdleWatcher() {
       return;
     }
     active = true;
-    const d = decideIdle(customIdleSeconds, fallbackSeconds);
+    const d = decideIdle(customIdleSeconds, fallbackSeconds, currentBacklightDim());
     logEvent("INFO", "screensaver activating", {
       trigger,
       basis: d.basis,

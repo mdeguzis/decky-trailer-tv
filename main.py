@@ -22,6 +22,7 @@ from lib.http_client import curl_json
 from lib.playlist import build_playlist
 from lib.plugin_logging import log_frontend_event
 from lib.settings import load_settings, save_settings
+from lib.steam_config import read_dim_seconds
 
 PLAYLIST_TTL_SECONDS = 6 * 60 * 60
 
@@ -85,6 +86,15 @@ class Plugin:
             "playlist refreshed | source=%s count=%d", source, len(clips)
         )
         return clips
+
+    async def get_dim_settings(self) -> dict[str, Any]:
+        """Backlight-dim timeouts (seconds) from config.vdf; values may be None."""
+        dim = read_dim_seconds()
+        decky.logger.debug(
+            "get_dim_settings | battery=%s ac=%s source=%s",
+            dim.get("battery"), dim.get("ac"), dim.get("source"),
+        )
+        return dim
 
     async def log_event(
         self, level: str, message: str, context: dict[str, Any] | None = None

@@ -63,61 +63,70 @@ export function isGameRunning(): boolean {
   }
 }
 
-export interface SteamIdle {
-  /** Steam's dim/screensaver timeout for the current power source (0 = disabled). */
-  screensaverSec: number;
-  /** Steam's suspend/sleep timeout for the current power source. */
-  suspendSec: number;
-}
-
-/** Read the live Steam idle timeouts for the current power source, or null. */
-export function readSteamIdle(): SteamIdle | null {
+/** Read the screensaver (screen-off) + suspend timeouts from settingsStore. */
+function readScreenTimeouts(): { screensaverSec: number; suspendSec: number } {
   try {
     const cs = (window as any).settingsStore?.m_ClientSettings;
-    if (!cs) return null;
+    if (!cs) return { screensaverSec: 0, suspendSec: 0 };
     const ac = isOnAC();
     return {
-      screensaverSec: ac
-        ? cs.system_idle_screensaver_ac_sec
-        : cs.system_idle_screensaver_battery_sec,
-      suspendSec: ac ? cs.system_idle_suspend_ac_sec : cs.system_idle_suspend_battery_sec,
+      screensaverSec:
+        (ac ? cs.system_idle_screensaver_ac_sec : cs.system_idle_screensaver_battery_sec) || 0,
+      suspendSec: (ac ? cs.system_idle_suspend_ac_sec : cs.system_idle_suspend_battery_sec) || 0,
     };
   } catch {
-    return null;
+    return { screensaverSec: 0, suspendSec: 0 };
   }
 }
 
+export type IdleBasis = "custom" | "backlight-dim" | "screen-off" | "suspend" | "fallback";
+
 export interface IdleDecision {
   seconds: number;
-  /** Which input produced `seconds` -- useful when a trigger fires unexpectedly. */
-  basis: "custom" | "steam-dim" | "steam-suspend" | "fallback";
+  /** Which timeout produced `seconds` -- useful when a trigger fires unexpectedly. */
+  basis: IdleBasis;
   onAC: boolean;
 }
 
 /**
- * Decide how long to wait before starting Trailer TV, with the basis for logging.
- * - customIdleSeconds > 0 overrides everything (user must set it below Steam's dim).
- * - else follow Steam's dim minus a small margin; if dim is disabled (0), follow
- *   the suspend timeout minus the margin.
- * - if Steam settings can't be read, fall back to `fallbackSeconds`.
+ * Decide how long to wait before starting Trailer TV. We fire just before the
+ * FIRST thing SteamOS would do on idle for the current power source -- whichever
+ * of backlight-dim / screen-off / suspend is the smallest non-zero timeout.
+ *
+ * - customIdleSeconds > 0 overrides everything.
+ * - `backlightDimSec` comes from the backend (config.vdf); the screen-off/suspend
+ *   timeouts come from settingsStore.
+ * - if nothing is readable, fall back to `fallbackSeconds`.
  */
-export function decideIdle(customIdleSeconds: number, fallbackSeconds: number): IdleDecision {
+export function decideIdle(
+  customIdleSeconds: number,
+  fallbackSeconds: number,
+  backlightDimSec: number | null,
+): IdleDecision {
   const onAC = isOnAC();
   if (customIdleSeconds && customIdleSeconds > 0) {
     return { seconds: Math.max(customIdleSeconds, 1), basis: "custom", onAC };
   }
-  const steam = readSteamIdle();
-  if (!steam) return { seconds: fallbackSeconds, basis: "fallback", onAC };
-  if (steam.screensaverSec > 0) {
-    return { seconds: Math.max(steam.screensaverSec - FIRE_BEFORE_SEC, MIN_IDLE_SEC), basis: "steam-dim", onAC };
-  }
-  if (steam.suspendSec > 0) {
-    return { seconds: Math.max(steam.suspendSec - FIRE_BEFORE_SEC, MIN_IDLE_SEC), basis: "steam-suspend", onAC };
-  }
-  return { seconds: fallbackSeconds, basis: "fallback", onAC };
+
+  const { screensaverSec, suspendSec } = readScreenTimeouts();
+  const candidates: { basis: IdleBasis; sec: number }[] = [];
+  if (backlightDimSec && backlightDimSec > 0) candidates.push({ basis: "backlight-dim", sec: backlightDimSec });
+  if (screensaverSec > 0) candidates.push({ basis: "screen-off", sec: screensaverSec });
+  if (suspendSec > 0) candidates.push({ basis: "suspend", sec: suspendSec });
+
+  if (candidates.length === 0) return { seconds: fallbackSeconds, basis: "fallback", onAC };
+
+  // Fire before the earliest idle action.
+  candidates.sort((a, b) => a.sec - b.sec);
+  const first = candidates[0];
+  return { seconds: Math.max(first.sec - FIRE_BEFORE_SEC, MIN_IDLE_SEC), basis: first.basis, onAC };
 }
 
 /** Convenience wrapper returning just the seconds (used by the idle tick). */
-export function computeIdleSeconds(customIdleSeconds: number, fallbackSeconds: number): number {
-  return decideIdle(customIdleSeconds, fallbackSeconds).seconds;
+export function computeIdleSeconds(
+  customIdleSeconds: number,
+  fallbackSeconds: number,
+  backlightDimSec: number | null,
+): number {
+  return decideIdle(customIdleSeconds, fallbackSeconds, backlightDimSec).seconds;
 }
