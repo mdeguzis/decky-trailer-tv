@@ -13,6 +13,7 @@ import {
   isOnAC,
   startControllerActivity,
   startComputerActiveState,
+  startResumeReset,
   COMPUTER_ACTIVE,
   COMPUTER_IDLE,
 } from "./lib/steamPower";
@@ -174,6 +175,13 @@ function startIdleWatcher() {
     if (state === COMPUTER_ACTIVE) markActivity();
   });
 
+  // On wake from suspend, JS timers were frozen so our idle clock is stale --
+  // reset it so we don't fire instantly on resume.
+  const stopResume = startResumeReset(() => {
+    logEvent("INFO", "resumed from suspend -- resetting idle clock", {});
+    markActivity();
+  });
+
   // Countdown status for the QAM (testing aid).
   window.__TRAILER_TV_STATUS__ = () => {
     const targetMs = idleMs();
@@ -207,6 +215,7 @@ function startIdleWatcher() {
     domEvents.forEach((evt) => window.removeEventListener(evt, onDom, true));
     stopController();
     stopActiveState();
+    stopResume();
     window.clearInterval(tick);
     window.clearInterval(settingsPoll);
     stopPowerTracking();

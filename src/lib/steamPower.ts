@@ -84,6 +84,29 @@ export const COMPUTER_ACTIVE = 1;
 export const COMPUTER_IDLE = 2;
 
 /**
+ * Call `onResume` when the Deck wakes from suspend. JS timers freeze during
+ * suspend, so on resume our idle clock is stale -- use this to reset it and avoid
+ * firing instantly on wake.
+ */
+export function startResumeReset(onResume: () => void): () => void {
+  try {
+    const handle = SteamClient.System?.RegisterForOnResumeFromSuspend?.(() => onResume());
+    if (handle && typeof handle.unregister === "function") {
+      return () => {
+        try {
+          handle.unregister();
+        } catch {
+          /* ignore */
+        }
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return () => {};
+}
+
+/**
  * Subscribe to Steam's own idle/active detection -- the same signal that drives
  * the dim/suspend. `state` is EComputerActiveState (1 = Active, 2 = Idle); `time`
  * is a Steam timestamp. This is the non-hacky way to know when the user is idle.
