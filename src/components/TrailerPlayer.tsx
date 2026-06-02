@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Navigation } from "@decky/ui";
 import { getPlaylist, getSettings, logEvent } from "../lib/backend";
-import { startControllerActivity } from "../lib/steamPower";
+import { startControllerActivity, startBrightnessAudit } from "../lib/steamPower";
 import type { Settings, TrailerClip } from "../lib/types";
 
 /** Advance a playlist cursor, wrapping at the end. Empty playlist -> 0. */
@@ -57,6 +57,19 @@ export function TrailerPlayer() {
       domEvents.forEach((evt) => window.removeEventListener(evt, onDom, true));
       stopController();
       window.__TRAILER_TV_ON_EXIT__?.();
+    };
+  }, []);
+
+  // AUDIT: any backlight brightness change while Trailer TV is on screen means
+  // SteamOS dimmed under us. Once keep-awake works there should be NONE.
+  useEffect(() => {
+    logEvent("INFO", "Trailer TV active -- dim audit started", {});
+    const stop = startBrightnessAudit((data) => {
+      logEvent("WARNING", "DIM during Trailer TV (brightness changed)", { data });
+    });
+    return () => {
+      stop();
+      logEvent("INFO", "Trailer TV closed -- dim audit stopped", {});
     };
   }, []);
 
@@ -148,6 +161,7 @@ export function TrailerPlayer() {
     >
       <video
         ref={videoRef}
+        poster={current?.thumbnail ?? undefined}
         style={{ width: "100%", height: "100%", objectFit: "contain" }}
         playsInline
       />

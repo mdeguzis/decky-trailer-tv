@@ -80,6 +80,29 @@ export function startControllerActivity(onInput: () => void): () => void {
 }
 
 /**
+ * Subscribe to display brightness changes -- used to AUDIT whether SteamOS dims
+ * the backlight while Trailer TV is active (it shouldn't, once keep-awake works).
+ * The payload shape is passed through raw so we log exactly what fired.
+ */
+export function startBrightnessAudit(onChange: (data: any) => void): () => void {
+  try {
+    const handle = SteamClient.System.Display?.RegisterForBrightnessChanges?.((d: any) => onChange(d));
+    if (handle && typeof handle.unregister === "function") {
+      return () => {
+        try {
+          handle.unregister();
+        } catch {
+          /* ignore */
+        }
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return () => {};
+}
+
+/**
  * True if a game/app is currently running. Trailer TV must never take over the
  * screen during gameplay. Uses the same SteamClient call decky-proton-pulse uses.
  */

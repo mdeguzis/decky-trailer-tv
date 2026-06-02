@@ -145,6 +145,8 @@ export function QamPanel() {
           <DebugStats />
         </PanelSectionRow>
       )}
+      {/* Bottom padding so the last row isn't clipped by the QAM. */}
+      <div style={{ height: 24 }} />
     </PanelSection>
   );
 }
