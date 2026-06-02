@@ -101,6 +101,19 @@ class Plugin:
         """Real hardware backlight from sysfs (detects the idle dim)."""
         return read_backlight()
 
+    async def nudge_input(self) -> dict[str, Any]:
+        """Emit a real input event via uinput to reset gamescope's idle timer."""
+        from lib import uinput_nudge  # pylint: disable=import-outside-toplevel
+        result = uinput_nudge.nudge()
+        if not result.get("ok"):
+            decky.logger.warning("nudge_input failed | err=%s", result.get("error"))
+        return result
+
+    async def stop_keep_awake(self) -> None:
+        """Tear down the uinput virtual device when the screensaver exits."""
+        from lib import uinput_nudge  # pylint: disable=import-outside-toplevel
+        uinput_nudge.close()
+
     async def log_event(
         self, level: str, message: str, context: dict[str, Any] | None = None
     ) -> None:

@@ -12,6 +12,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "idleSeconds": 120,      # fallback when Steam's power settings can't be read
     "customIdleSeconds": 0,  # 0 = follow Steam's dim; else must be < Steam's dim
     "debug": False,          # show the live status/stats panel in the QAM
+    "keepAwakeStrategy": "uinput",  # off | brightness | uinput
 }
 
 

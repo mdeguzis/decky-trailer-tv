@@ -10,7 +10,7 @@ import {
   Focusable,
 } from "@decky/ui";
 import { getSettings, setSettings, refreshPlaylist } from "../lib/backend";
-import type { Settings, TrailerSource } from "../lib/types";
+import type { Settings, TrailerSource, KeepAwakeStrategy } from "../lib/types";
 
 const ROUTE = "/trailer-tv";
 
@@ -155,6 +155,20 @@ export function QamPanel() {
           onChange={(v) => void update({ debug: v })}
         />
       </PanelSectionRow>
+      {settings.debug && (
+        <PanelSectionRow>
+          <DropdownItem
+            label="Keep-awake"
+            rgOptions={[
+              { data: "uinput", label: "uinput (real input)" },
+              { data: "brightness", label: "brightness write-back" },
+              { data: "off", label: "off (audit only)" },
+            ]}
+            selectedOption={settings.keepAwakeStrategy}
+            onChange={(o) => void update({ keepAwakeStrategy: o.data as KeepAwakeStrategy })}
+          />
+        </PanelSectionRow>
+      )}
       {settings.debug && (
         <PanelSectionRow>
           <DebugStats />

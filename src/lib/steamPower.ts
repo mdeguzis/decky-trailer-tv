@@ -133,6 +133,17 @@ export function startComputerActiveState(
   return () => {};
 }
 
+// The uinput nudge emits a real input event (to reset gamescope idle) which also
+// reaches the UI as a DOM event. Suppress the player's exit-on-input briefly around
+// each nudge so the screensaver ignores its own injected input.
+let _ignoreExitUntil = 0;
+export function suppressExitFor(ms: number): void {
+  _ignoreExitUntil = Date.now() + ms;
+}
+export function exitSuppressed(): boolean {
+  return Date.now() < _ignoreExitUntil;
+}
+
 /** Re-assert the Steam brightness setting (0-1) to counter the idle backlight dim. */
 export function setSteamBrightness(level: number): void {
   try {

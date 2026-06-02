@@ -1,9 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Navigation } from "@decky/ui";
-import { getPlaylist, getSettings, getBacklight, logEvent } from "../lib/backend";
-import { startControllerActivity, startBrightnessAudit, setSteamBrightness } from "../lib/steamPower";
+import {
+  getPlaylist,
+  getSettings,
+  getBacklight,
+  nudgeInput,
+  stopKeepAwake,
+  logEvent,
+} from "../lib/backend";
+import {
+  startControllerActivity,
+  startBrightnessAudit,
+  setSteamBrightness,
+  suppressExitFor,
+  exitSuppressed,
+} from "../lib/steamPower";
 import type { Settings, TrailerClip } from "../lib/types";
+
+const UINPUT_NUDGE_MS = 15000;
 
 /** Advance a playlist cursor, wrapping at the end. Empty playlist -> 0. */
 function nextIndex(current: number, length: number): number {
@@ -31,7 +46,8 @@ export function TrailerPlayer() {
     let exited = false;
 
     const exit = (source: string) => {
-      if (exited || Date.now() < armAt) return;
+      // Ignore our own injected uinput nudge (the "input TT ignores").
+      if (exited || Date.now() < armAt || exitSuppressed()) return;
       exited = true;
       logEvent("INFO", "screensaver exited by input", { source });
       Navigation.NavigateBack();
@@ -60,17 +76,21 @@ export function TrailerPlayer() {
     };
   }, []);
 
-  // KEEP-AWAKE (backlight write-back): poll the real hardware backlight (sysfs)
-  // -- RegisterForBrightnessChanges is blind to the idle dim. When the backlight
-  // drops below baseline, re-assert the user's brightness setting to counter the
-  // dim. The brightness subscription captures the setting to restore to.
+  // KEEP-AWAKE + DIM AUDIT. The sysfs backlight poll always runs and logs real
+  // dims (RegisterForBrightnessChanges is blind to them), so we can SEE which
+  // strategy actually holds the screen. The strategy then acts:
+  //   - brightness: re-assert the user's brightness setting on a drop
+  //   - uinput: emit a real input nudge to reset gamescope idle (prevents dim
+  //             AND screen-off AND suspend), suppressing self-exit around it
+  //   - off: audit only
+  const strategy = settings?.keepAwakeStrategy ?? "uinput";
   useEffect(() => {
-    logEvent("INFO", "Trailer TV active -- backlight keep-awake started", {});
+    if (!settings) return;
+    logEvent("INFO", "keep-awake started", { strategy });
     let baselineRaw: number | null = null;
     let savedBrightness: number | null = null;
     let cancelled = false;
 
-    // Capture the Steam brightness setting (0-1) to restore to.
     const stopBrightness = startBrightnessAudit((data) => {
       if (typeof data?.flBrightness === "number" && data.flBrightness > 0) {
         savedBrightness = data.flBrightness;
@@ -85,26 +105,41 @@ export function TrailerPlayer() {
         return;
       }
       if (bl.raw < baselineRaw * 0.9) {
-        logEvent("WARNING", "dim detected -- restoring backlight", {
+        logEvent("WARNING", "DIM during Trailer TV (backlight dropped)", {
           fromRaw: baselineRaw,
           toRaw: bl.raw,
           ratio: bl.ratio,
-          savedBrightness,
+          strategy,
         });
-        if (savedBrightness !== null) setSteamBrightness(savedBrightness);
+        if (strategy === "brightness" && savedBrightness !== null) {
+          setSteamBrightness(savedBrightness);
+        }
       }
     };
-
     void poll();
-    const id = window.setInterval(() => void poll(), 1500);
+    const auditId = window.setInterval(() => void poll(), 1500);
+
+    // uinput nudge loop.
+    let nudgeId = 0;
+    if (strategy === "uinput") {
+      const nudge = async () => {
+        suppressExitFor(700);
+        const r = await nudgeInput();
+        logEvent("DEBUG", "uinput nudge", r);
+      };
+      void nudge();
+      nudgeId = window.setInterval(() => void nudge(), UINPUT_NUDGE_MS);
+    }
+
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      window.clearInterval(auditId);
+      if (nudgeId) window.clearInterval(nudgeId);
       stopBrightness();
-      logEvent("INFO", "Trailer TV closed -- backlight keep-awake stopped", {});
+      if (strategy === "uinput") void stopKeepAwake();
+      logEvent("INFO", "keep-awake stopped", { strategy });
     };
-  }, []);
-
+  }, [settings, strategy]);
 
   // Load playlist + settings once on mount.
   useEffect(() => {

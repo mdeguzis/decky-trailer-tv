@@ -21,6 +21,9 @@ export interface Backlight {
 }
 export const getBacklight = callable<[], Backlight>("get_backlight");
 
+export const nudgeInput = callable<[], { ok: boolean; error?: string }>("nudge_input");
+export const stopKeepAwake = callable<[], void>("stop_keep_awake");
+
 const logEventBackend = callable<[level: string, message: string, context?: object], void>("log_event");
 
 /** Fire-and-forget structured log relayed to the Python logger. */
