@@ -7,6 +7,7 @@ import {
   ToggleField,
   DropdownItem,
   SliderField,
+  Focusable,
 } from "@decky/ui";
 import { getSettings, setSettings, refreshPlaylist } from "../lib/backend";
 import type { Settings, TrailerSource } from "../lib/types";
@@ -155,8 +156,11 @@ export function QamPanel() {
           <DebugStats />
         </PanelSectionRow>
       )}
-      {/* Bottom padding so the last row isn't clipped by the QAM. */}
-      <div style={{ height: 24 }} />
+      {/* Focusable bottom spacer: the QAM only scrolls to focusable elements, so
+          this lets gamepad nav reach the end and reveals the debug stats above. */}
+      <Focusable style={{ height: 48 }}>
+        <div />
+      </Focusable>
     </PanelSection>
   );
 }
