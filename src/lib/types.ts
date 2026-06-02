@@ -8,6 +8,7 @@ export interface TrailerClip {
 }
 
 export interface Settings {
+  enabled: boolean;
   source: TrailerSource;
   audio: boolean;
   idleSeconds: number;

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_SETTINGS: dict[str, Any] = {
+    "enabled": True,         # master on/off; off pauses the auto-trigger
     "source": "popular",     # latest | popular | random (QAM dropdown)
     "audio": False,          # muted by default; a TV screensaver shouldn't blare
     "idleSeconds": 120,      # fallback when Steam's power settings can't be read

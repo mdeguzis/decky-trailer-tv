@@ -41,11 +41,13 @@ function DebugStats() {
   if (!status) {
     return <div style={{ fontSize: 12, color: "#888" }}>status unavailable</div>;
   }
-  const state = status.active
-    ? "ACTIVE (playing)"
-    : status.gameRunning
-      ? "suppressed (game running)"
-      : "idle-watching";
+  const state = !status.enabled
+    ? "disabled (paused)"
+    : status.active
+      ? "ACTIVE (playing)"
+      : status.gameRunning
+        ? "suppressed (game running)"
+        : "idle-watching";
   return (
     <div style={{ fontSize: 12, lineHeight: 1.6, color: "#ccc", fontFamily: "monospace" }}>
       <div>state: {state}</div>
@@ -88,6 +90,14 @@ export function QamPanel() {
 
   return (
     <PanelSection title="Trailer TV">
+      <PanelSectionRow>
+        <ToggleField
+          label="Enabled"
+          description="Turn off to pause the screensaver (take a break)."
+          checked={settings.enabled}
+          onChange={(v) => void update({ enabled: v })}
+        />
+      </PanelSectionRow>
       <PanelSectionRow>
         <DropdownItem
           label="Trailers"

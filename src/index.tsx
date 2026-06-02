@@ -23,6 +23,7 @@ const SETTINGS_POLL_MS = 15000;
 const FALLBACK_IDLE_SECONDS = 120;
 
 export interface TrailerTvStatus {
+  enabled: boolean;
   active: boolean;
   gameRunning: boolean;
   secondsUntil: number;
@@ -51,6 +52,7 @@ function startIdleWatcher() {
   let lastActivity = Date.now();
   let active = false;
   let lastFiredAt: number | null = null;
+  let enabled = true;
   let customIdleSeconds = 0;
   let fallbackSeconds = FALLBACK_IDLE_SECONDS;
   let dimBattery: number | null = null; // backlight dim seconds (from config.vdf)
@@ -78,6 +80,7 @@ function startIdleWatcher() {
   const loadIdle = () =>
     void Promise.all([getSettings(), getDimSettings()])
       .then(([s, dim]) => {
+        enabled = s.enabled ?? true;
         customIdleSeconds = s.customIdleSeconds ?? 0;
         fallbackSeconds = s.idleSeconds ?? FALLBACK_IDLE_SECONDS;
         dimBattery = dim.battery;
@@ -97,6 +100,10 @@ function startIdleWatcher() {
 
   const start = (trigger: string) => {
     if (active) return;
+    if (!enabled) {
+      logEvent("INFO", "screensaver suppressed: disabled", { trigger });
+      return;
+    }
     if (isGameRunning()) {
       logEvent("INFO", "screensaver suppressed: game running", { trigger });
       return;
@@ -156,6 +163,7 @@ function startIdleWatcher() {
     const idleForMs = Date.now() - lastActivity;
     const d = decideIdle(customIdleSeconds, fallbackSeconds, currentBacklightDim());
     return {
+      enabled,
       active,
       gameRunning: isGameRunning(),
       secondsUntil: Math.max(0, Math.ceil((targetMs - idleForMs) / 1000)),
@@ -167,9 +175,9 @@ function startIdleWatcher() {
 
   const tick = window.setInterval(() => {
     if (active) return;
-    // Never fire while a game is running -- and keep the idle clock reset so it
-    // doesn't immediately fire the moment the game exits.
-    if (isGameRunning()) {
+    // Paused or in-game -- keep the idle clock reset so it doesn't immediately
+    // fire the moment it's re-enabled or the game exits.
+    if (!enabled || isGameRunning()) {
       lastActivity = Date.now();
       return;
     }

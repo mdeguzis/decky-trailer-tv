@@ -60,12 +60,32 @@ export function TrailerPlayer() {
     };
   }, []);
 
-  // AUDIT: any backlight brightness change while Trailer TV is on screen means
-  // SteamOS dimmed under us. Once keep-awake works there should be NONE.
+  // AUDIT: a backlight brightness DROP while Trailer TV is on screen means SteamOS
+  // dimmed under us. The first callback is the baseline (current brightness), not a
+  // dim. Once keep-awake works there should be no drops.
   useEffect(() => {
     logEvent("INFO", "Trailer TV active -- dim audit started", {});
+    let baseline: number | null = null;
     const stop = startBrightnessAudit((data) => {
-      logEvent("WARNING", "DIM during Trailer TV (brightness changed)", { data });
+      const level = typeof data?.flBrightness === "number" ? data.flBrightness : null;
+      if (level === null) {
+        logEvent("INFO", "brightness change (unknown shape)", { data });
+        return;
+      }
+      if (baseline === null) {
+        baseline = level;
+        logEvent("INFO", "brightness baseline during Trailer TV", { level });
+        return;
+      }
+      if (level < baseline - 0.01) {
+        logEvent("WARNING", "DIM during Trailer TV (brightness dropped)", {
+          from: baseline,
+          to: level,
+        });
+      } else if (level > baseline + 0.01) {
+        logEvent("INFO", "brightness restored during Trailer TV", { from: baseline, to: level });
+        baseline = level;
+      }
     });
     return () => {
       stop();
