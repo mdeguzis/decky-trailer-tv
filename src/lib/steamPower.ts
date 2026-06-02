@@ -157,6 +157,48 @@ export function startBrightnessAudit(onChange: (data: any) => void): () => void 
 }
 
 /**
+ * KEEP-AWAKE PROTOTYPE: periodically nudge the mouse via SteamClient.Input to try
+ * to reset Steam/gamescope idle so the backlight doesn't dim while Trailer TV
+ * plays. Uncertain whether SetMousePosition resets the gamescope seat idle (which
+ * is libinput-based) -- the sysfs backlight audit verifies it empirically.
+ * Returns a stop function. Logs each nudge via the provided logger.
+ */
+export function startKeepAwake(log: (msg: string, ctx?: object) => void): () => void {
+  let focusedPid = 0;
+  let focusReg: { unregister: () => void } | null = null;
+  try {
+    focusReg = SteamClient.System.UI?.RegisterForFocusChangeEvents?.((e: any) => {
+      const pid = e?.focusedApp?.pid;
+      if (typeof pid === "number") focusedPid = pid;
+    });
+  } catch {
+    /* ignore */
+  }
+
+  let toggle = 0;
+  const NUDGE_MS = 15000;
+  const id = window.setInterval(() => {
+    try {
+      toggle = toggle ? 0 : 1;
+      // Jiggle 1px in the top-left corner to minimise any visible cursor.
+      SteamClient.Input?.SetMousePosition?.(focusedPid, toggle, 0);
+      log("keep-awake nudge", { pid: focusedPid, x: toggle });
+    } catch (e) {
+      log("keep-awake nudge failed", { reason: String(e) });
+    }
+  }, NUDGE_MS);
+
+  return () => {
+    window.clearInterval(id);
+    try {
+      focusReg?.unregister();
+    } catch {
+      /* ignore */
+    }
+  };
+}
+
+/**
  * True if a game/app is currently running. Trailer TV must never take over the
  * screen during gameplay. Uses the same SteamClient call decky-proton-pulse uses.
  */
