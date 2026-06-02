@@ -43,6 +43,7 @@ declare global {
     __TRAILER_TV_ON_EXIT__?: () => void;
     __TRAILER_TV_IDLE_SECONDS__?: number;
     __TRAILER_TV_STATUS__?: () => TrailerTvStatus;
+    __TRAILER_TV_RELOAD__?: () => void;
   }
 }
 
@@ -94,6 +95,9 @@ function startIdleWatcher() {
       .catch((e) => logEvent("WARNING", "idle settings load failed", { reason: String(e) }));
   loadIdle();
   startPowerTracking();
+  // Let the QAM force an immediate settings reload (so debug/state reflect toggles
+  // right away instead of waiting for the 15s poll).
+  window.__TRAILER_TV_RELOAD__ = loadIdle;
   logEvent("INFO", "idle watcher started", { fallbackSeconds: FALLBACK_IDLE_SECONDS });
 
   // Fire right before the first idle action (backlight dim / screen off / suspend),
@@ -223,6 +227,7 @@ function startIdleWatcher() {
     delete window.__TRAILER_TV_STOP__;
     delete window.__TRAILER_TV_ON_EXIT__;
     delete window.__TRAILER_TV_STATUS__;
+    delete window.__TRAILER_TV_RELOAD__;
   };
 }
 

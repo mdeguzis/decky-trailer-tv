@@ -55,12 +55,26 @@ function DebugStats() {
       ? "-"
       : `${status.secondsUntil}s`;
   return (
-    <div style={{ fontSize: 12, lineHeight: 1.6, color: "#ccc", fontFamily: "monospace" }}>
+    <div
+      style={{
+        fontSize: 11,
+        lineHeight: 1.5,
+        color: "#ccc",
+        fontFamily: "monospace",
+        whiteSpace: "normal",
+        overflowWrap: "anywhere",
+        wordBreak: "break-word",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        paddingRight: 8,
+      }}
+    >
       <div>state: {state}</div>
       <div>
         countdown: {countdown} / {status.triggerSeconds}s ({status.basis})
       </div>
-      <div>last fired: {formatLastFired(status.lastFiredAt)}</div>
+      <div>last fired:</div>
+      <div>{formatLastFired(status.lastFiredAt)}</div>
     </div>
   );
 }
@@ -77,6 +91,8 @@ export function QamPanel() {
   const update = async (partial: Partial<Settings>) => {
     const next = await setSettings(partial);
     setLocal(next);
+    // Push the change to the running watcher immediately so debug/state reflect it.
+    window.__TRAILER_TV_RELOAD__?.();
   };
 
   const refresh = async () => {
