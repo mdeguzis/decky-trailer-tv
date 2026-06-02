@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,11 @@ from lib.backlight import read_backlight
 from lib.http_client import curl_json
 from lib.playlist import get_candidate_appids, fetch_clip
 from lib.plugin_logging import log_frontend_event
+from lib.plugin_updater import (
+    check_for_update as _updater_check,
+    make_initial_status as _updater_make_status,
+    start_apply_update as _updater_start,
+)
 from lib.settings import load_settings, save_settings
 from lib.steam_config import read_dim_seconds, write_dim_seconds
 
@@ -47,6 +53,9 @@ class Plugin:
         self._playlist_source: str = ""
         self._playlist_built_at: float = 0.0
         self._playlist_building: bool = False
+        self._update_status: dict[str, Any] = _updater_make_status()
+        self._update_lock = threading.Lock()
+        self._update_cancel = threading.Event()
 
     async def _main(self) -> None:
         decky.logger.info("Trailer TV backend starting")
@@ -131,6 +140,38 @@ class Plugin:
             decky.logger.info(
                 "playlist_bg: done | source=%s count=%d", source, len(self._playlist)
             )
+
+    async def get_plugin_version(self) -> str:
+        """Return the version string Decky knows about."""
+        return getattr(decky, "DECKY_PLUGIN_VERSION", "unknown")
+
+    async def check_for_update(self, channel: str = "release") -> dict[str, Any]:
+        """Check GitHub Releases for a newer version; returns update info dict."""
+        current = getattr(decky, "DECKY_PLUGIN_VERSION", "unknown")
+        return _updater_check(current, channel=channel)
+
+    async def apply_update(self, zip_url: str, version: str) -> dict[str, Any]:
+        """Start a background download-and-install; poll get_update_status() for progress."""
+        with self._update_lock:
+            if self._update_status.get("state") == "running":
+                return {"ok": False, "error": "Update already in progress"}
+        self._update_cancel.clear()
+        _updater_start(
+            zip_url, version, decky.DECKY_PLUGIN_DIR,
+            self._update_status, self._update_lock, self._update_cancel,
+        )
+        return {"ok": True}
+
+    async def get_update_status(self) -> dict[str, Any]:
+        """Return a snapshot of the current update progress."""
+        with self._update_lock:
+            return dict(self._update_status)
+
+    async def cancel_update(self) -> dict[str, Any]:
+        """Signal the in-progress update to stop."""
+        self._update_cancel.set()
+        decky.logger.info("cancel_update: cancel signal sent")
+        return {"ok": True}
 
     async def get_dim_settings(self) -> dict[str, Any]:
         """Backlight-dim timeouts (seconds) from config.vdf; values may be None."""

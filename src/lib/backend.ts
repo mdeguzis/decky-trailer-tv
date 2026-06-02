@@ -26,6 +26,39 @@ export const stopKeepAwake = callable<[], void>("stop_keep_awake");
 export const disableDim = callable<[], { ok: boolean; previous?: unknown; error?: string }>("disable_dim");
 export const restoreDim = callable<[], { ok: boolean }>("restore_dim");
 
+export const getPluginVersion = callable<[], string>("get_plugin_version");
+
+export interface UpdateCheckResult {
+  success: boolean;
+  current_version: string;
+  latest_version?: string;
+  has_update?: boolean;
+  zip_url?: string;
+  asset_size?: number | null;
+  release_url?: string;
+  release_notes?: string;
+  published_at?: string;
+  channel?: string;
+  error?: string;
+}
+
+export interface UpdateStatus {
+  state: "idle" | "running" | "success" | "error";
+  stage: "downloading" | "extracting" | null;
+  downloaded_bytes: number | null;
+  total_bytes: number | null;
+  progress_fraction: number | null;
+  version: string | null;
+  error: string | null;
+  started_at: number | null;
+  finished_at: number | null;
+}
+
+export const checkForUpdate = callable<[channel: string], UpdateCheckResult>("check_for_update");
+export const applyUpdate = callable<[zip_url: string, version: string], { ok: boolean; error?: string }>("apply_update");
+export const getUpdateStatus = callable<[], UpdateStatus>("get_update_status");
+export const cancelUpdate = callable<[], { ok: boolean }>("cancel_update");
+
 const logEventBackend = callable<[level: string, message: string, context?: object], void>("log_event");
 
 /** Fire-and-forget structured log relayed to the Python logger. */

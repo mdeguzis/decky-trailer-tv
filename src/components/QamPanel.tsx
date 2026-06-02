@@ -13,6 +13,7 @@ import { getSettings, setSettings, refreshPlaylist } from "../lib/backend";
 import type { Settings, TrailerSource, KeepAwakeStrategy } from "../lib/types";
 
 const ROUTE = "/trailer-tv";
+const SETTINGS_ROUTE = "/trailer-tv-settings";
 
 const SOURCE_OPTIONS: { data: TrailerSource; label: string }[] = [
   { data: "latest", label: "Latest" },
@@ -161,6 +162,11 @@ export function QamPanel() {
       <PanelSectionRow>
         <ButtonItem layout="below" onClick={() => Navigation.Navigate(ROUTE)}>
           Test
+        </ButtonItem>
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ButtonItem layout="below" onClick={() => Navigation.Navigate(SETTINGS_ROUTE)}>
+          Settings / Updates
         </ButtonItem>
       </PanelSectionRow>
       <PanelSectionRow>

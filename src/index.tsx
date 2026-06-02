@@ -3,6 +3,7 @@ import { staticClasses, Navigation } from "@decky/ui";
 import { FaTv } from "react-icons/fa";
 import { TrailerPlayer } from "./components/TrailerPlayer";
 import { QamPanel } from "./components/QamPanel";
+import { SettingsPage } from "./components/SettingsPage";
 import { getSettings, getDimSettings, logEvent } from "./lib/backend";
 import { startSteamSpy } from "./lib/steamSpy";
 import {
@@ -20,6 +21,7 @@ import {
 } from "./lib/steamPower";
 
 const ROUTE = "/trailer-tv";
+const SETTINGS_ROUTE = "/trailer-tv-settings";
 const TICK_MS = 1000;
 const SETTINGS_POLL_MS = 15000;
 
@@ -235,6 +237,7 @@ function startIdleWatcher() {
 export default definePlugin(() => {
   logEvent("INFO", "plugin mounted", {});
   routerHook.addRoute(ROUTE, TrailerPlayer, { exact: true });
+  routerHook.addRoute(SETTINGS_ROUTE, SettingsPage, { exact: true });
   const stopWatcher = startIdleWatcher();
 
   // Debug-only: spy on SteamClient calls to capture what the "dim after" slider invokes.
@@ -253,6 +256,7 @@ export default definePlugin(() => {
       stopSpy?.();
       stopWatcher();
       routerHook.removeRoute(ROUTE);
+      routerHook.removeRoute(SETTINGS_ROUTE);
     },
   };
 });
