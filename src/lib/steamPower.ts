@@ -79,6 +79,37 @@ export function startControllerActivity(onInput: () => void): () => void {
   };
 }
 
+// Steam's own computer active-state (EComputerActiveState).
+export const COMPUTER_ACTIVE = 1;
+export const COMPUTER_IDLE = 2;
+
+/**
+ * Subscribe to Steam's own idle/active detection -- the same signal that drives
+ * the dim/suspend. `state` is EComputerActiveState (1 = Active, 2 = Idle); `time`
+ * is a Steam timestamp. This is the non-hacky way to know when the user is idle.
+ */
+export function startComputerActiveState(
+  onChange: (state: number, time: number) => void,
+): () => void {
+  try {
+    const handle = SteamClient.WebChat?.RegisterForComputerActiveStateChange?.(
+      (state: number, time: number) => onChange(state, time),
+    );
+    if (handle && typeof handle.unregister === "function") {
+      return () => {
+        try {
+          handle.unregister();
+        } catch {
+          /* ignore */
+        }
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return () => {};
+}
+
 /**
  * Subscribe to display brightness changes -- used to AUDIT whether SteamOS dims
  * the backlight while Trailer TV is active (it shouldn't, once keep-awake works).

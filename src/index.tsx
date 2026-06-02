@@ -12,6 +12,9 @@ import {
   isGameRunning,
   isOnAC,
   startControllerActivity,
+  startComputerActiveState,
+  COMPUTER_ACTIVE,
+  COMPUTER_IDLE,
 } from "./lib/steamPower";
 
 const ROUTE = "/trailer-tv";
@@ -157,6 +160,20 @@ function startIdleWatcher() {
   // Mode, so use Steam's controller input signal to reset the idle clock.
   const stopController = startControllerActivity(markActivity);
 
+  // INSTRUMENTATION: Steam's own idle/active detection (AAGaming's tip). Log when
+  // it fires relative to our trigger + the dim, and reset on Active. Once we
+  // confirm the Idle timing on-device, the trigger can move onto this directly.
+  const stopActiveState = startComputerActiveState((state, time) => {
+    const name = state === COMPUTER_IDLE ? "Idle" : state === COMPUTER_ACTIVE ? "Active" : `state-${state}`;
+    logEvent("INFO", "computer active-state changed", {
+      state: name,
+      time,
+      ourTriggerSeconds: Math.round(idleMs() / 1000),
+      idleForMs: Date.now() - lastActivity,
+    });
+    if (state === COMPUTER_ACTIVE) markActivity();
+  });
+
   // Countdown status for the QAM (testing aid).
   window.__TRAILER_TV_STATUS__ = () => {
     const targetMs = idleMs();
@@ -189,6 +206,7 @@ function startIdleWatcher() {
   return () => {
     domEvents.forEach((evt) => window.removeEventListener(evt, onDom, true));
     stopController();
+    stopActiveState();
     window.clearInterval(tick);
     window.clearInterval(settingsPoll);
     stopPowerTracking();
