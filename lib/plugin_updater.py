@@ -19,7 +19,7 @@ from typing import Any
 
 import decky  # type: ignore[import-untyped]
 
-from .http_client import curl_download, curl_json
+from .http_client import HttpError, curl_download, curl_json
 
 GITHUB_REPO = "mdeguzis/decky-trailer-tv"
 _RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
@@ -108,6 +108,23 @@ def check_for_update(current_version: str, channel: str = "release") -> dict[str
             "published_at": str(data.get("published_at", "") or ""),
             "channel": channel,
         }
+    except HttpError as he:
+        # curl reached GitHub but got an HTTP error. A 404 just means nothing's
+        # been published on this channel yet (no release, or the repo/tag
+        # doesn't exist) -- surface that as an explicit, actionable message
+        # rather than a raw curl error.
+        if he.status == 404:
+            if channel == "developer":
+                msg = "No developer release published yet (HTTP 404)"
+            else:
+                msg = f"No published {channel} release found yet (HTTP 404)"
+        else:
+            msg = f"GitHub returned HTTP {he.status} for the {channel} channel"
+        decky.logger.error(
+            "check_for_update: %s | channel=%s url=%s status=%d",
+            msg, channel, he.url, he.status,
+        )
+        return {"success": False, "error": msg, "current_version": current_version}
     except Exception as exc:
         decky.logger.error("check_for_update: failed | channel=%s err=%s", channel, exc)
         return {"success": False, "error": str(exc), "current_version": current_version}

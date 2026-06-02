@@ -18,6 +18,23 @@ from .plugin_utils import system_command_env
 ProgressCallback = Callable[[int, int | None, float | None], None]
 
 
+class HttpError(RuntimeError):
+    """Raised when curl completed but the server returned an HTTP >=400 status.
+
+    Carries the numeric ``status`` plus the request ``url`` and a short ``body``
+    snippet so callers (and the logs) can tell a 404 (nothing published yet)
+    apart from a 5xx (GitHub down) or a transport failure (no HTTP response at
+    all). Subclasses RuntimeError so existing ``except Exception`` callers keep
+    working.
+    """
+
+    def __init__(self, status: int, url: str, body: str = "") -> None:
+        self.status = status
+        self.url = url
+        self.body = body
+        super().__init__(f"HTTP {status} from {url}")
+
+
 def curl_json(
     url: str,
     *,
@@ -28,12 +45,20 @@ def curl_json(
 
     Runs with a cleaned env (see system_command_env) so Decky's bundled OpenSSL
     doesn't make system curl fail with ``OPENSSL_3.2.0 not found``.
+
+    We deliberately do NOT pass ``-f``: that flag makes curl abort on HTTP
+    errors with an opaque ``curl: (22)`` and throws away the status code and
+    response body -- useless when debugging a 404 on the Deck. Instead we append
+    ``%{http_code}`` to stdout and branch in Python so transport failures, HTTP
+    error statuses, and bad JSON each get a distinct, logged outcome. Raises
+    :class:`HttpError` (with the status) on HTTP >=400.
     """
     command = [
-        "curl", "-LfsS", "--http1.1",
+        "curl", "-sS", "-L", "--http1.1",
         "--connect-timeout", "20",
-        "--retry", "2", "--retry-all-errors", "--retry-delay", "2",
+        "--retry", "2", "--retry-delay", "2",
         "--max-time", str(timeout),
+        "-w", "\n%{http_code}",
         "-H", "User-Agent: Mozilla/5.0",
         url,
     ]
@@ -43,11 +68,53 @@ def curl_json(
         command, capture_output=True, text=True, timeout=timeout + 10,
         env=system_command_env(), check=False,
     )
+
+    # Transport-level failure: curl itself errored (DNS, TLS, connection reset,
+    # the bundled-OpenSSL clash, etc) so there's no usable HTTP response. The
+    # real reason lives in stderr.
     if result.returncode != 0:
-        raise RuntimeError(
-            result.stderr.strip() or f"curl failed with exit code {result.returncode}"
+        stderr = (result.stderr or "").strip()
+        decky.logger.error(
+            "curl_json: transport failure | url=%s rc=%d stderr=%s",
+            url, result.returncode, stderr or "(empty)",
         )
-    return json.loads(result.stdout)  # type: ignore[no-any-return]
+        raise RuntimeError(stderr or f"curl exited with code {result.returncode}")
+
+    # We appended "\n%{http_code}", so the status is the final line and the body
+    # is everything before it. The body can contain newlines, so split on the
+    # LAST newline only.
+    raw = result.stdout
+    newline = raw.rfind("\n")
+    if newline == -1:
+        decky.logger.error("curl_json: no HTTP status in curl output | url=%s", url)
+        raise RuntimeError(f"curl returned no HTTP status for {url}")
+    body = raw[:newline]
+    status_text = raw[newline + 1:].strip()
+    try:
+        status = int(status_text)
+    except ValueError:
+        status = 0
+
+    if status >= 400:
+        snippet = body.strip().replace("\n", " ")[:200]
+        decky.logger.error(
+            "curl_json: http error | url=%s status=%d body=%s",
+            url, status, snippet or "(empty)",
+        )
+        raise HttpError(status, url, body)
+
+    decky.logger.debug(
+        "curl_json: ok | url=%s status=%d bytes=%d", url, status, len(body),
+    )
+    try:
+        return json.loads(body)  # type: ignore[no-any-return]
+    except json.JSONDecodeError as exc:
+        snippet = body.strip().replace("\n", " ")[:200]
+        decky.logger.error(
+            "curl_json: invalid JSON | url=%s status=%d err=%s body=%s",
+            url, status, exc, snippet or "(empty)",
+        )
+        raise RuntimeError(f"Invalid JSON from {url}: {exc}") from exc
 
 
 def curl_download(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches

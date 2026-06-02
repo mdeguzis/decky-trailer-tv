@@ -1,7 +1,8 @@
 from lib.playlist import (
     FEATURED_URL,
     buckets_for_source,
-    build_playlist,
+    fetch_clip,
+    get_candidate_appids,
     parse_featured_appids,
     parse_trailer,
 )
@@ -71,8 +72,25 @@ def test_parse_trailer_returns_none_when_no_movies_or_no_hls():
     assert parse_trailer(_appdetails(62, [{"id": 1}], success=False), 62) is None
 
 
-def test_build_playlist_fetches_details_and_skips_trailerless():
-    featured = {"top_sellers": {"items": [{"id": 1}, {"id": 2}, {"id": 3}]}}
+def test_get_candidate_appids_pulls_from_source_bucket():
+    featured = {
+        "top_sellers": {"items": [{"id": 1}, {"id": 2}, {"id": 3}]},
+        "new_releases": {"items": [{"id": 99}]},
+    }
+    captured = {}
+
+    def fake_fetch(url):
+        captured["url"] = url
+        return featured
+
+    # "popular" -> top_sellers only, order preserved.
+    assert get_candidate_appids(fake_fetch, "popular") == [1, 2, 3]
+    assert captured["url"] == FEATURED_URL
+
+
+def test_fetch_clip_builds_clip_and_skips_trailerless():
+    # Mirrors how main.py's background fill drives the live path: candidates from
+    # get_candidate_appids, then fetch_clip per app. App 2 has no movies -> None.
     details = {
         1: {"1": {"success": True, "data": {"name": "G1", "type": "game", "movies": [{"id": 9, "hls_h264": "1.m3u8", "highlight": True, "thumbnail": "x"}]}}},
         2: {"2": {"success": True, "data": {"name": "G2", "type": "game", "movies": []}}},  # skipped (no movies)
@@ -80,11 +98,9 @@ def test_build_playlist_fetches_details_and_skips_trailerless():
     }
 
     def fake_fetch(url):
-        if url == FEATURED_URL:
-            return featured
         appid = int(url.split("appids=")[1].split("&")[0])
         return details[appid]
 
-    clips = build_playlist(fake_fetch, "popular", limit=10)
+    clips = [c for appid in (1, 2, 3) if (c := fetch_clip(fake_fetch, appid))]
     assert [c["appid"] for c in clips] == [1, 3]
     assert clips[0]["hls_url"] == "1.m3u8"

@@ -87,36 +87,3 @@ def parse_trailer(appdetails: dict[str, Any], appid: int) -> dict[str, Any] | No
         "hls_url": hls_url,
         "thumbnail": chosen.get("thumbnail") or data.get("header_image"),
     }
-
-
-def build_playlist(
-    fetch_json: FetchJson,
-    source: str,
-    *,
-    playlist_limit: int = 50,
-) -> list[dict[str, Any]]:
-    """Fetch featured app IDs for `source`, then per-app trailers, into a playlist.
-
-    "random" shuffles a mix of all buckets; "latest"/"popular" keep Steam's order.
-    All unique candidate IDs from the buckets are tried; fetching stops once
-    `playlist_limit` playable clips are collected.
-    Logging is the caller's responsibility (main.py) so this stays testable.
-    """
-    categories = buckets_for_source(source)
-    featured = fetch_json(FEATURED_URL)
-    appids = parse_featured_appids(featured, categories)
-    if source == "random":
-        random.shuffle(appids)
-
-    clips: list[dict[str, Any]] = []
-    for appid in appids:
-        if len(clips) >= playlist_limit:
-            break
-        try:
-            details = fetch_json(APPDETAILS_URL.format(appid=appid))
-        except Exception:  # noqa: BLE001 - one bad app must not kill the batch
-            continue
-        clip = parse_trailer(details, appid)
-        if clip:
-            clips.append(clip)
-    return clips

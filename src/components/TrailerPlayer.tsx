@@ -266,13 +266,33 @@ export function TrailerPlayer() {
     video.muted = !(settings?.audio ?? false);
     void video.play().catch((e) => onError(String(e)));
 
+    // Distinct from the optimistic "playing clip" log above: this fires only
+    // once the media element actually begins playback, so a clip that buffers
+    // forever (logs "playing clip" but never this) is diagnosable.
+    const onPlaying = () => {
+      logEvent("DEBUG", "clip playback started", {
+        appid: current.appid,
+        durationSeconds: Number.isFinite(video.duration)
+          ? Math.round(video.duration)
+          : null,
+        muted: video.muted,
+      });
+    };
+    video.addEventListener("playing", onPlaying, { once: true });
+
     const onEnded = () => {
       failuresRef.current = 0;
+      logEvent("DEBUG", "clip ended", {
+        appid: current.appid,
+        name: current.name,
+        watchedSeconds: Math.round(video.currentTime),
+      });
       advance();
     };
     video.addEventListener("ended", onEnded);
 
     return () => {
+      video.removeEventListener("playing", onPlaying);
       video.removeEventListener("ended", onEnded);
       hls?.destroy();
     };
