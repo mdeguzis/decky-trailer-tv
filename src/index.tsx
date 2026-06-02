@@ -4,6 +4,7 @@ import { FaTv } from "react-icons/fa";
 import { TrailerPlayer } from "./components/TrailerPlayer";
 import { QamPanel } from "./components/QamPanel";
 import { getSettings, getDimSettings, logEvent } from "./lib/backend";
+import { startSteamSpy } from "./lib/steamSpy";
 import {
   startPowerTracking,
   stopPowerTracking,
@@ -236,6 +237,12 @@ export default definePlugin(() => {
   routerHook.addRoute(ROUTE, TrailerPlayer, { exact: true });
   const stopWatcher = startIdleWatcher();
 
+  // Debug-only: spy on SteamClient calls to capture what the "dim after" slider invokes.
+  let stopSpy: (() => void) | undefined;
+  void getSettings().then((s) => {
+    if (s.debug) stopSpy = startSteamSpy();
+  });
+
   return {
     name: "Trailer TV",
     titleView: <div className={staticClasses.Title}>Trailer TV</div>,
@@ -243,6 +250,7 @@ export default definePlugin(() => {
     icon: <FaTv />,
     onDismount() {
       logEvent("INFO", "plugin unmounting", {});
+      stopSpy?.();
       stopWatcher();
       routerHook.removeRoute(ROUTE);
     },
