@@ -38,6 +38,8 @@ from lib.steam_config import read_dim_seconds, write_dim_seconds, read_lock_scre
 _DIM_DISABLED_SECONDS = 86400
 
 PLAYLIST_TTL_SECONDS = 6 * 60 * 60
+# How long to reuse a cached appid list before re-fetching SteamSpy/CDN.
+APPID_CACHE_TTL_SECONDS = 6 * 60 * 60
 
 
 class Plugin:
@@ -59,6 +61,36 @@ class Plugin:
         self._update_lock = threading.Lock()
         self._update_cancel = threading.Event()
         self._played_history: list[dict[str, Any]] = []
+
+    # ----- appid cache helpers -----
+
+    def _appid_cache_path(self, source: str) -> Path:
+        return self._runtime / f"appid_cache_{source}.json"
+
+    def _load_appid_cache(self, source: str) -> list[int] | None:
+        path = self._appid_cache_path(source)
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text())
+            age = time.time() - data.get("timestamp", 0)
+            if age > APPID_CACHE_TTL_SECONDS:
+                decky.logger.debug("_load_appid_cache: expired | source=%s age=%.0fs", source, age)
+                return None
+            appids = data.get("appids", [])
+            decky.logger.info("_load_appid_cache: hit | source=%s age=%.0fs count=%d", source, age, len(appids))
+            return appids
+        except Exception as exc:  # noqa: BLE001
+            decky.logger.warning("_load_appid_cache: read failed | source=%s err=%s", source, exc)
+            return None
+
+    def _save_appid_cache(self, source: str, appids: list[int]) -> None:
+        path = self._appid_cache_path(source)
+        try:
+            path.write_text(json.dumps({"timestamp": time.time(), "appids": appids}))
+            decky.logger.debug("_save_appid_cache: saved | source=%s count=%d", source, len(appids))
+        except Exception as exc:  # noqa: BLE001
+            decky.logger.warning("_save_appid_cache: write failed | source=%s err=%s", source, exc)
 
     async def _main(self) -> None:
         decky.logger.info("Trailer TV backend starting")
@@ -109,17 +141,36 @@ class Plugin:
         return self._playlist
 
     async def refresh_playlist(self) -> list[dict[str, Any]]:
-        """Reset the playlist and start an async background fill; return immediately."""
+        """Start a background playlist fill; return immediately.
+
+        Smart refresh: for non-random sources, keeps existing clips and only
+        fetches clips for appids not already loaded (additive). Clears and
+        rebuilds when the source changes or the source is 'random'.
+        """
         if self._playlist_building:
             decky.logger.debug("refresh_playlist: build already running, skipping")
             return self._playlist
         settings = load_settings(self._settings_path)
         source = settings.get("source", "popular")
-        self._playlist = []
+        is_random = source == "random"
+        source_changed = source != self._playlist_source
+        full_rebuild = is_random or source_changed
+
+        if full_rebuild:
+            self._playlist = []
+            decky.logger.info(
+                "refresh_playlist: full rebuild | source=%s reason=%s",
+                source, "source_changed" if source_changed else "random",
+            )
+        else:
+            decky.logger.info(
+                "refresh_playlist: additive refresh | source=%s existing=%d",
+                source, len(self._playlist),
+            )
+
         self._playlist_source = source
         self._playlist_built_at = time.time()
-        asyncio.create_task(self._fill_playlist_bg(source))
-        decky.logger.info("refresh_playlist: background build started | source=%s", source)
+        asyncio.create_task(self._fill_playlist_bg(source, full_rebuild=full_rebuild))
         return self._playlist
 
     async def is_playlist_building(self) -> bool:
@@ -138,15 +189,36 @@ class Plugin:
             "total": self._playlist_candidates,
         }
 
-    async def _fill_playlist_bg(self, source: str) -> None:
-        """Fetch every available candidate clip and append to self._playlist as each arrives."""
+    async def _fill_playlist_bg(self, source: str, full_rebuild: bool = True) -> None:
+        """Fetch candidate clips and append to self._playlist as each arrives.
+
+        Uses a disk-cached appid list (TTL = APPID_CACHE_TTL_SECONDS) to avoid
+        re-hitting SteamSpy/CDN on every refresh. For additive refreshes, skips
+        appids whose clips are already loaded.
+        """
         self._playlist_building = True
         self._playlist_candidates = 0
         loop = asyncio.get_running_loop()
         try:
-            appids = await loop.run_in_executor(None, get_candidate_appids, curl_json, source)
-            self._playlist_candidates = len(appids)
-            decky.logger.info("playlist_bg: got %d candidates | source=%s", len(appids), source)
+            # Use cached appids if available, else fetch and cache.
+            appids = self._load_appid_cache(source)
+            if appids is None:
+                appids = await loop.run_in_executor(None, get_candidate_appids, curl_json, source)
+                self._save_appid_cache(source, appids)
+            else:
+                decky.logger.info("playlist_bg: using cached appids | source=%s count=%d", source, len(appids))
+
+            # For additive refresh: skip appids already represented in the playlist.
+            if not full_rebuild:
+                existing = {clip["appid"] for clip in self._playlist}
+                appids = [aid for aid in appids if aid not in existing]
+                decky.logger.info(
+                    "playlist_bg: additive | new_candidates=%d skipped=%d",
+                    len(appids), len(existing),
+                )
+
+            self._playlist_candidates = len(self._playlist) + len(appids)
+            decky.logger.info("playlist_bg: got %d candidates | source=%s full=%s", len(appids), source, full_rebuild)
             for appid in appids:
                 try:
                     clip = await loop.run_in_executor(None, fetch_clip, curl_json, appid)

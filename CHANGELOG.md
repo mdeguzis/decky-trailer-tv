@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.18] - 2026-06-03
+
+### Fixed
+- Playlist source dropdown is now clickable: wrapped in PanelSectionRow so
+  gamepad focus navigation reaches it correctly.
+
+### Changed
+- Smart refresh: for non-random sources (Latest/Popular/Trending), Refresh now
+  keeps existing clips and only fetches trailers for appids not already loaded.
+  Changing source or using Random always triggers a full rebuild.
+- Appid cache: SteamSpy and CDN appid lists are now cached to disk for 6 hours
+  (appid_cache_{source}.json in the plugin runtime dir). Repeat refreshes reuse
+  the cached list instead of re-hitting the network.
+
 ## [0.5.17] - 2026-06-03
 
 ### Fixed

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DialogButton, DropdownItem } from "@decky/ui";
+import { DialogButton, DropdownItem, PanelSectionRow } from "@decky/ui";
 import {
   getPlaylist,
   refreshPlaylist,
@@ -86,13 +86,15 @@ export function PlaylistTab() {
         </DialogButton>
       }
       subheader={
-        <DropdownItem
-          label="Source"
-          rgOptions={SOURCE_OPTIONS.map((o) => ({ data: o.data, label: o.label }))}
-          selectedOption={source}
-          onChange={(o) => void handleSourceChange(o.data as TrailerSource)}
-          disabled={building}
-        />
+        <PanelSectionRow>
+          <DropdownItem
+            label="Source"
+            rgOptions={SOURCE_OPTIONS.map((o) => ({ data: o.data, label: o.label }))}
+            selectedOption={source}
+            onChange={(o) => void handleSourceChange(o.data as TrailerSource)}
+            disabled={building}
+          />
+        </PanelSectionRow>
       }
       loading={loading}
       emptyText="No trailers loaded yet. Press Refresh to build the playlist."
