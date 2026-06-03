@@ -77,13 +77,15 @@ export function PlaylistTab() {
       }
       action={
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <DropdownItem
-            label=""
-            rgOptions={SOURCE_OPTIONS.map((o) => ({ data: o.data, label: o.label }))}
-            selectedOption={source}
-            onChange={(o) => void handleSourceChange(o.data as TrailerSource)}
-            strDefaultLabel="Source"
-          />
+          <div style={{ width: 150, flexShrink: 0 }}>
+            <DropdownItem
+              label=""
+              rgOptions={SOURCE_OPTIONS.map((o) => ({ data: o.data, label: o.label }))}
+              selectedOption={source}
+              onChange={(o) => void handleSourceChange(o.data as TrailerSource)}
+              strDefaultLabel="Source"
+            />
+          </div>
           <DialogButton
             style={{ width: 130, minWidth: 130, flexShrink: 0, fontSize: 12 }}
             disabled={building}
