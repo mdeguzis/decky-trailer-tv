@@ -1,5 +1,8 @@
 from lib.playlist import (
     FEATURED_URL,
+    STEAMSPY_2W_URL,
+    STEAMSPY_FOREVER_URL,
+    PROTON_PULSE_SEARCH_INDEX_URL,
     buckets_for_source,
     fetch_clip,
     get_candidate_appids,
@@ -11,12 +14,8 @@ from lib.playlist import (
 def test_buckets_for_source_maps_dropdown_types():
     assert buckets_for_source("latest") == ["new_releases"]
     assert buckets_for_source("popular") == ["top_sellers"]
-    assert set(buckets_for_source("random")) == {
-        "specials",
-        "new_releases",
-        "top_sellers",
-        "coming_soon",
-    }
+    # random and trending use SteamSpy, not featured buckets -- fall back to popular
+    assert buckets_for_source("random") == ["top_sellers"]
     # Unknown falls back to the default (popular).
     assert buckets_for_source("bogus") == ["top_sellers"]
 
@@ -91,6 +90,60 @@ def test_get_candidate_appids_primary_bucket_first_then_extras():
     assert 99 in result and 50 in result  # extras merged in
     assert result.count(2) == 1  # deduped across buckets
     assert captured["url"] == FEATURED_URL
+
+
+def test_get_candidate_appids_random_uses_steamspy_and_supplements_from_cdn():
+    spy_2w = {"730": {"appid": 730}, "440": {"appid": 440}}
+    spy_forever = {"570": {"appid": 570}, "730": {"appid": 730}}
+    # CDN entry for a game NOT in SteamSpy lists, plus a duplicate.
+    cdn_data = [["999", "Some Game", "gold", 5, 0], ["730", "CS", "gold", 100, 0]]
+    calls = []
+
+    def fake_fetch(url):
+        calls.append(url)
+        if url == STEAMSPY_2W_URL:
+            return spy_2w
+        if url == STEAMSPY_FOREVER_URL:
+            return spy_forever
+        if url == PROTON_PULSE_SEARCH_INDEX_URL:
+            return cdn_data
+        return {}
+
+    result = get_candidate_appids(fake_fetch, "random")
+    # SteamSpy IDs + unique CDN supplement, no duplicates
+    assert set(result) == {730, 440, 570, 999}
+    assert STEAMSPY_2W_URL in calls
+    assert STEAMSPY_FOREVER_URL in calls
+    assert PROTON_PULSE_SEARCH_INDEX_URL in calls
+    assert FEATURED_URL not in calls
+
+
+def test_get_candidate_appids_random_falls_back_to_cdn_when_steamspy_empty():
+    cdn_data = [["100", "Game A", "gold", 5, 0], ["200", "Game B", "silver", 3, 0]]
+    calls = []
+
+    def fake_fetch(url):
+        calls.append(url)
+        if url == PROTON_PULSE_SEARCH_INDEX_URL:
+            return cdn_data
+        return {}  # SteamSpy returns empty dicts
+
+    result = get_candidate_appids(fake_fetch, "random")
+    assert set(result) == {100, 200}
+    assert PROTON_PULSE_SEARCH_INDEX_URL in calls
+
+
+def test_get_candidate_appids_trending_uses_steamspy_2w():
+    spy_2w = {"730": {"appid": 730}, "440": {"appid": 440}}
+    calls = []
+
+    def fake_fetch(url):
+        calls.append(url)
+        return spy_2w if url == STEAMSPY_2W_URL else {}
+
+    result = get_candidate_appids(fake_fetch, "trending")
+    assert set(result) == {730, 440}
+    assert calls == [STEAMSPY_2W_URL]
 
 
 def test_fetch_clip_builds_clip_and_skips_trailerless():

@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-06-03
+
+### Added
+- Playlist pre-warms on backend startup so trailers are ready before the
+  screensaver first fires instead of building on-demand from scratch.
+- Trailer Playlist tab now has a source dropdown (Latest / Popular / Trending /
+  Random) so the category can be changed without opening the QAM.
+- Build progress shown as "(built/total)" in the playlist tab title while
+  loading, via a new get_build_status backend endpoint.
+- New "Trending" source backed by SteamSpy top-100 by current players
+  (top100in2weeks), surfaced in both the QAM and playlist tab dropdowns.
+- Random source now draws from SteamSpy top-100 (2-week + all-time) combined
+  with a 100-game random sample from the Proton Pulse CDN (6k+ real Steam
+  games), giving ~300 candidates vs the previous ~56 from featured only.
+  Falls back to CDN alone if SteamSpy is unavailable.
+
 ## [0.5.2] - 2026-06-02
 
 ### Fixed

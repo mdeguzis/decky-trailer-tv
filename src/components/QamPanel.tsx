@@ -19,6 +19,7 @@ const SETTINGS_ROUTE = "/trailer-tv-settings";
 const SOURCE_OPTIONS: { data: TrailerSource; label: string }[] = [
   { data: "latest", label: "Latest" },
   { data: "popular", label: "Popular" },
+  { data: "trending", label: "Trending" },
   { data: "random", label: "Random" },
 ];
 

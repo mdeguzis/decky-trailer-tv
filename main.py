@@ -54,6 +54,7 @@ class Plugin:
         self._playlist_source: str = ""
         self._playlist_built_at: float = 0.0
         self._playlist_building: bool = False
+        self._playlist_candidates: int = 0
         self._update_status: dict[str, Any] = _updater_make_status()
         self._update_lock = threading.Lock()
         self._update_cancel = threading.Event()
@@ -65,6 +66,8 @@ class Plugin:
         if self._dim_backup_path.exists():
             decky.logger.warning("dim backup found on start -- restoring user's dim settings")
             await self.restore_dim()
+        # Pre-warm the playlist so it's ready before the screensaver first fires.
+        await self.refresh_playlist()
 
     async def _unload(self) -> None:
         decky.logger.info("Trailer TV backend unloading")
@@ -124,12 +127,22 @@ class Plugin:
         """Return the number of clips built so far (useful for live refresh progress)."""
         return len(self._playlist)
 
+    async def get_build_status(self) -> dict[str, Any]:
+        """Return live build progress: built count, candidate total, and building flag."""
+        return {
+            "building": self._playlist_building,
+            "count": len(self._playlist),
+            "total": self._playlist_candidates,
+        }
+
     async def _fill_playlist_bg(self, source: str) -> None:
         """Fetch every available candidate clip and append to self._playlist as each arrives."""
         self._playlist_building = True
+        self._playlist_candidates = 0
         loop = asyncio.get_running_loop()
         try:
             appids = await loop.run_in_executor(None, get_candidate_appids, curl_json, source)
+            self._playlist_candidates = len(appids)
             decky.logger.info("playlist_bg: got %d candidates | source=%s", len(appids), source)
             for appid in appids:
                 try:

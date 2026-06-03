@@ -1,4 +1,4 @@
-export type TrailerSource = "latest" | "popular" | "random";
+export type TrailerSource = "latest" | "popular" | "trending" | "random";
 
 export type UpdateChannel = "release" | "pre-release" | "developer";
 

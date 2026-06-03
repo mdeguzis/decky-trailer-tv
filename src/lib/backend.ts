@@ -28,6 +28,8 @@ export const restoreDim = callable<[], { ok: boolean }>("restore_dim");
 
 export const isPlaylistBuilding = callable<[], boolean>("is_playlist_building");
 export const getPlaylistCount = callable<[], number>("get_playlist_count");
+export interface BuildStatus { building: boolean; count: number; total: number; }
+export const getBuildStatus = callable<[], BuildStatus>("get_build_status");
 export const recordPlayedClip = callable<[appid: number, name: string], void>("record_played_clip");
 export const getPlayedHistory = callable<[], { appid: number; name: string }[]>("get_played_history");
 export const getPluginVersion = callable<[], string>("get_plugin_version");
