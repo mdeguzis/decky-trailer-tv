@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.19] - 2026-06-03
+
+### Fixed
+- Lock screen actually works now (confirmed on-device). The Deck lock screen is a
+  SteamUI overlay (window.securitystore), not a system screensaver, so the old
+  loginctl / dbus-send ScreenSaver.Lock calls returned ok but never showed it in
+  Game Mode. Exiting Trailer TV now calls
+  securitystore.SetActiveLockScreenProps({preventCancel, preventSteamButtons}),
+  the same path Steam's own lock-on-wake uses, gated on a PIN being configured.
+
+### Changed
+- "settings" keep-awake strategy now raises the idle backlight-dim timeout live
+  through settingsStore.SetIdleBacklightDimSeconds (SteamClient.System.UpdateSettings)
+  instead of writing config.vdf, which gamescope never re-read live. Experimental:
+  not yet confirmed on-device to stop the dim.
+- README: added a Features list and reworded the lock screen section now that the
+  lock works.
+
 ## [0.5.18] - 2026-06-03
 
 ### Fixed

@@ -1,7 +1,8 @@
 // Reads the user's configured Steam power timeouts so Trailer TV fires right
 // before SteamOS would dim, and tracks AC vs battery to pick the right values.
-// Read-only: this module never mutates Steam settings (the keep-awake write is a
-// separate, carefully-tested step).
+// Mostly read-only; the one mutator is the idle-backlight-dim keep-awake write
+// (disableIdleBacklightDim / restoreIdleBacklightDim) which goes through Steam's
+// own settingsStore so the change reaches gamescope live.
 
 import { logEvent } from "./backend";
 
@@ -255,4 +256,113 @@ export function computeIdleSeconds(
   backlightDimSec: number | null,
 ): number {
   return decideIdle(customIdleSeconds, fallbackSeconds, backlightDimSec).seconds;
+}
+
+// --- Lock screen ---------------------------------------------------------
+// Steam's Deck lock screen is a SteamUI MobX overlay exposed as
+// `window.securitystore`, NOT a system screensaver. `loginctl lock-sessions`
+// and `dbus-send org.freedesktop.ScreenSaver.Lock` return ok in Game Mode but
+// never render it. The only thing that shows the PIN overlay is setting the
+// store's active lock-screen props -- this is exactly what Steam's own
+// "lock on wake" does (Di({preventCancel,preventSteamButtons}) -> securitystore
+// .SetActiveLockScreenProps).
+
+/**
+ * Lock the Deck via Steam's client-side PIN overlay. Only locks when a PIN is
+ * configured (`GetSettings().strPIN`); the overlay asserts a PIN is set, so
+ * calling it without one is pointless. Returns whether it actually locked.
+ */
+export function lockSteamScreen(): { ok: boolean; locked: boolean; error?: string } {
+  try {
+    const ss = (window as any).securitystore;
+    if (!ss?.GetSettings || !ss?.SetActiveLockScreenProps) {
+      return { ok: false, locked: false, error: "securitystore unavailable" };
+    }
+    const hasPin = !!ss.GetSettings()?.strPIN;
+    if (!hasPin) return { ok: true, locked: false };
+    ss.SetActiveLockScreenProps({ preventCancel: true, preventSteamButtons: true });
+    return { ok: true, locked: true };
+  } catch (e) {
+    return { ok: false, locked: false, error: String(e) };
+  }
+}
+
+// --- Idle backlight dim (the "settings" keep-awake strategy) -------------
+// SteamUI writes the dim timeout via settingsStore.SetIdleBacklightDimSeconds,
+// which serializes a settings protobuf and pushes it through
+// SteamClient.System.UpdateSettings -- the SAME path the OS "Dim after" slider
+// uses, so gamescope applies it live. (Writing IdleBacklightDim* to config.vdf
+// is persistence only; gamescope does not re-read it without this IPC push.)
+const DIM_DISABLED_SECONDS = 86400; // 24h ~= "never" for the length of a session
+const DIM_BACKUP_KEY = "trailerTV.idleDimBackup";
+
+interface IdleDimValues {
+  ac: number | null;
+  battery: number | null;
+}
+
+function readIdleBacklightDim(): IdleDimValues {
+  try {
+    const cs = (window as any).settingsStore?.m_ClientSettings;
+    if (!cs) return { ac: null, battery: null };
+    const num = (v: unknown) => (typeof v === "number" ? v : null);
+    return {
+      ac: num(cs.idle_backlight_dim_ac_seconds),
+      battery: num(cs.idle_backlight_dim_battery_seconds),
+    };
+  } catch {
+    return { ac: null, battery: null };
+  }
+}
+
+function writeIdleBacklightDim(values: IdleDimValues): void {
+  const ss = (window as any).settingsStore;
+  if (typeof ss?.SetIdleBacklightDimSeconds !== "function") {
+    throw new Error("settingsStore.SetIdleBacklightDimSeconds unavailable");
+  }
+  // First arg is bOnAC: true = AC value, false = battery value.
+  if (typeof values.ac === "number") ss.SetIdleBacklightDimSeconds(true, values.ac);
+  if (typeof values.battery === "number") ss.SetIdleBacklightDimSeconds(false, values.battery);
+}
+
+/**
+ * Raise the idle backlight-dim timeout so gamescope won't dim while Trailer TV
+ * plays. Backs the user's current values up to localStorage (crash-safe: a
+ * session that dies mid-play is undone by the next settings-run's restore) and
+ * only backs up once so re-entry never overwrites the true original with 24h.
+ */
+export function disableIdleBacklightDim(): {
+  ok: boolean;
+  saved?: IdleDimValues;
+  error?: string;
+} {
+  try {
+    const saved = readIdleBacklightDim();
+    if (!localStorage.getItem(DIM_BACKUP_KEY)) {
+      localStorage.setItem(DIM_BACKUP_KEY, JSON.stringify(saved));
+    }
+    writeIdleBacklightDim({ ac: DIM_DISABLED_SECONDS, battery: DIM_DISABLED_SECONDS });
+    return { ok: true, saved };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+/** Restore the idle backlight-dim values saved by disableIdleBacklightDim. */
+export function restoreIdleBacklightDim(): {
+  ok: boolean;
+  restored?: IdleDimValues;
+  noop?: boolean;
+  error?: string;
+} {
+  try {
+    const raw = localStorage.getItem(DIM_BACKUP_KEY);
+    if (!raw) return { ok: true, noop: true };
+    const saved: IdleDimValues = JSON.parse(raw);
+    writeIdleBacklightDim(saved);
+    localStorage.removeItem(DIM_BACKUP_KEY);
+    return { ok: true, restored: saved };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
 }

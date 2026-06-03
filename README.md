@@ -6,6 +6,14 @@ it plays random game trailers from the Steam store instead of showing a blank sc
 Designed for living-room or docked game mode. If your Deck is plugged into a TV, the TV
 handles its own display. The plugin just keeps playing trailers until you press a button.
 
+## Features
+
+- Plays real game trailers from the Steam store when your Deck or PC sits idle, instead of a blank screen
+- Pick the source: Latest, Popular, Trending, or Random
+- Respects your Steam Deck lock screen. With a Security PIN set, waking out of Trailer TV locks the Deck and asks for the PIN before your library shows up
+- Audio off by default, with a toggle when you want sound
+- Works docked to a TV or handheld
+
 ## Requirements
 
 - [Decky Loader](https://decky.xyz) installed
@@ -29,12 +37,12 @@ handles its own display. The plugin just keeps playing trailers until you press 
 
 ## Lock screen
 
-If you have a PIN set in Steam Settings > Security (the Steam Deck lock screen), Trailer TV
-will lock the device when you dismiss the screensaver. Anyone walking up and pressing a button
-gets the PIN prompt, not your library. This mirrors what a real screensaver does on a PC with
-"require password on resume" enabled.
+Trailer TV respects your Steam Deck lock screen setting. If you have a PIN set under Steam
+Settings > Security, waking out of the screensaver locks the Deck and shows the PIN prompt
+before anyone reaches your library. It works like waking from sleep with a PIN set, so
+leaving trailers running somewhere public does not hand over your session.
 
-If no PIN is configured, dismissing the screensaver returns to your library as normal.
+With no PIN set, dismissing the screensaver drops you back to your library.
 
 ## Known limitations
 

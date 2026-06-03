@@ -6,11 +6,8 @@ import {
   getSettings,
   getBacklight,
   getLockScreenSettings,
-  lockScreen,
   nudgeInput,
   stopKeepAwake,
-  disableDim,
-  restoreDim,
   recordPlayedClip,
   logEvent,
 } from "../lib/backend";
@@ -20,6 +17,9 @@ import {
   setSteamBrightness,
   suppressExitFor,
   exitSuppressed,
+  lockSteamScreen,
+  disableIdleBacklightDim,
+  restoreIdleBacklightDim,
 } from "../lib/steamPower";
 import type { Settings, TrailerClip } from "../lib/types";
 
@@ -57,16 +57,12 @@ export function TrailerPlayer() {
       if (exited || Date.now() < armAt || exitSuppressed()) return;
       exited = true;
       logEvent("INFO", "screensaver exited by input", { source, lockPending: hasPinRef.current });
-      if (hasPinRef.current) {
-        // Try Steam's own client-side lock API first (loginctl does not reach
-        // Steam's internal PIN lock screen in game mode).
-        void lockScreen().then((r) =>
-          logEvent(r.ok ? "INFO" : "WARNING", "lock_screen result", r as object)
-        );
-        Navigation.NavigateBack();
-      } else {
-        Navigation.NavigateBack();
-      }
+      // Lock via Steam's client-side PIN overlay (window.securitystore). The old
+      // backend loginctl/dbus path returns ok but never renders the lock screen
+      // in Game Mode. lockSteamScreen no-ops when no PIN is set.
+      const r = lockSteamScreen();
+      logEvent(r.ok ? "INFO" : "WARNING", "lock_screen result", { ...r, hadPin: hasPinRef.current });
+      Navigation.NavigateBack();
     };
 
     const domEvents: (keyof WindowEventMap)[] = [
@@ -135,9 +131,11 @@ export function TrailerPlayer() {
     void poll();
     const auditId = window.setInterval(() => void poll(), 1500);
 
-    // settings route: raise the dim timeout so gamescope never dims.
+    // settings route: raise the idle backlight-dim timeout via settingsStore so
+    // gamescope applies it live and never dims while we play.
     if (strategy === "settings") {
-      void disableDim().then((r) => logEvent("INFO", "disable_dim", r as object));
+      const r = disableIdleBacklightDim();
+      logEvent(r.ok ? "INFO" : "WARNING", "disable_dim (settingsStore)", r as object);
     }
 
     // uinput nudge loop.
@@ -163,7 +161,10 @@ export function TrailerPlayer() {
       if (nudgeId) window.clearInterval(nudgeId);
       stopBrightness();
       if (strategy === "uinput") void stopKeepAwake();
-      if (strategy === "settings") void restoreDim().then((r) => logEvent("INFO", "restore_dim", r as object));
+      if (strategy === "settings") {
+        const r = restoreIdleBacklightDim();
+        logEvent(r.ok ? "INFO" : "WARNING", "restore_dim (settingsStore)", r as object);
+      }
       logEvent("INFO", "keep-awake stopped", { strategy });
     };
   }, [settings, strategy]);
