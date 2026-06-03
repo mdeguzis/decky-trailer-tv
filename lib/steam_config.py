@@ -65,6 +65,31 @@ def _set_value(text: str, key: str, value: int) -> str:
     return pattern.sub(r"\g<1>" + str(value) + r"\g<2>", text, count=1)
 
 
+def read_lock_screen_settings() -> dict[str, object]:
+    """Return whether a Steam Deck lock screen PIN is configured.
+
+    Reads LockScreenSettings from config.vdf. Returns has_pin=True if strPIN is
+    non-empty. Never exposes the PIN value itself.
+    """
+    import json as _json  # pylint: disable=import-outside-toplevel
+    path = find_config_vdf()
+    if path is None:
+        return {"has_pin": False, "source": None}
+    try:
+        text = path.read_text(errors="ignore")
+    except OSError:
+        return {"has_pin": False, "source": str(path)}
+    m = re.search(r'"LockScreenSettings"\s+"({[^"]+})"', text)
+    if not m:
+        return {"has_pin": False, "source": str(path)}
+    try:
+        settings = _json.loads(m.group(1).replace('\\"', '"'))
+        has_pin = bool(settings.get("strPIN", ""))
+        return {"has_pin": has_pin, "source": str(path)}
+    except (ValueError, KeyError):
+        return {"has_pin": False, "source": str(path)}
+
+
 def write_dim_seconds(battery: int | None, ac: int | None) -> dict[str, object]:
     """Set IdleBacklightDim{Battery,AC}Seconds in config.vdf. Returns prev + ok."""
     path = find_config_vdf()

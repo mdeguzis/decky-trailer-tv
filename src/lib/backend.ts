@@ -26,6 +26,10 @@ export const stopKeepAwake = callable<[], void>("stop_keep_awake");
 export const disableDim = callable<[], { ok: boolean; previous?: unknown; error?: string }>("disable_dim");
 export const restoreDim = callable<[], { ok: boolean }>("restore_dim");
 
+export interface LockScreenSettings { has_pin: boolean; source: string | null; }
+export const getLockScreenSettings = callable<[], LockScreenSettings>("get_lock_screen_settings");
+export const lockScreen = callable<[], { ok: boolean; error?: string }>("lock_screen");
+
 export const isPlaylistBuilding = callable<[], boolean>("is_playlist_building");
 export const getPlaylistCount = callable<[], number>("get_playlist_count");
 export interface BuildStatus { building: boolean; count: number; total: number; }

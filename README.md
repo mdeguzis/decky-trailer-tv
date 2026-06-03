@@ -23,9 +23,18 @@ handles its own display. The plugin just keeps playing trailers until you press 
 | Setting | Description |
 |---|---|
 | Enabled | Master on/off toggle |
-| Trailers | Source: Latest, Popular, or Random |
+| Trailers | Source: Latest, Popular, Trending, or Random |
 | Play audio | Muted by default (a screensaver probably should not blare) |
 | Start after idle | How long before the screensaver fires (0 = follow Steam's dim timeout) |
+
+## Lock screen
+
+If you have a PIN set in Steam Settings > Security (the Steam Deck lock screen), Trailer TV
+will lock the device when you dismiss the screensaver. Anyone walking up and pressing a button
+gets the PIN prompt, not your library. This mirrors what a real screensaver does on a PC with
+"require password on resume" enabled.
+
+If no PIN is configured, dismissing the screensaver returns to your library as normal.
 
 ## Known limitations
 

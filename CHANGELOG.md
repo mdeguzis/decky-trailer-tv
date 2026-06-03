@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2026-06-03
+
+### Added
+- Lock screen on screensaver exit: if a Steam Deck lock PIN is configured in
+  Steam Settings > Security, Trailer TV calls loginctl lock-session when the
+  screensaver is dismissed, so the PIN prompt appears instead of returning
+  directly to the library. Documented in README under "Lock screen".
+
 ## [0.5.4] - 2026-06-03
 
 ### Fixed

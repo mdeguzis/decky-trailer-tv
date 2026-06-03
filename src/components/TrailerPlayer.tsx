@@ -5,6 +5,8 @@ import {
   getPlaylist,
   getSettings,
   getBacklight,
+  getLockScreenSettings,
+  lockScreen,
   nudgeInput,
   stopKeepAwake,
   disableDim,
@@ -41,6 +43,7 @@ export function TrailerPlayer() {
   const [loading, setLoading] = useState(true);
   const failuresRef = useRef(0);
   const knownAppidsRef = useRef<Set<number>>(new Set());
+  const hasPinRef = useRef(false);
 
   // Exit on ANY input, like a real idle/sleep screensaver -- regardless of how
   // it was launched (idle trigger or the QAM "Test" button). Notifies the idle
@@ -53,8 +56,15 @@ export function TrailerPlayer() {
       // Ignore our own injected uinput nudge (the "input TT ignores").
       if (exited || Date.now() < armAt || exitSuppressed()) return;
       exited = true;
-      logEvent("INFO", "screensaver exited by input", { source });
+      logEvent("INFO", "screensaver exited by input", { source, lockPending: hasPinRef.current });
       Navigation.NavigateBack();
+      // If a Steam Deck lock PIN is configured, lock the screen so the device
+      // can't be accessed without the PIN after dismissing the screensaver.
+      if (hasPinRef.current) {
+        void lockScreen().then((r) =>
+          logEvent(r.ok ? "INFO" : "WARNING", "lock_screen result", r as object)
+        );
+      }
     };
 
     const domEvents: (keyof WindowEventMap)[] = [
@@ -161,13 +171,15 @@ export function TrailerPlayer() {
   useEffect(() => {
     void (async () => {
       try {
-        const [pl, s] = await Promise.all([getPlaylist(false), getSettings()]);
+        const [pl, s, lock] = await Promise.all([getPlaylist(false), getSettings(), getLockScreenSettings()]);
         setSettings(s);
         pl.forEach((c) => knownAppidsRef.current.add(c.appid));
         setClips(pl);
+        hasPinRef.current = lock.has_pin;
         logEvent("INFO", "TrailerPlayer mounted", {
           source: s.source,
           count: pl.length,
+          lockOnExit: lock.has_pin,
         });
       } finally {
         setLoading(false);

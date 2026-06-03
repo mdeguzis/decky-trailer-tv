@@ -32,7 +32,7 @@ from lib.plugin_updater import (
     start_apply_update as _updater_start,
 )
 from lib.settings import load_settings, save_settings
-from lib.steam_config import read_dim_seconds, write_dim_seconds
+from lib.steam_config import read_dim_seconds, write_dim_seconds, read_lock_screen_settings
 
 # A value large enough that gamescope effectively never dims while active.
 _DIM_DISABLED_SECONDS = 86400
@@ -298,6 +298,29 @@ class Plugin:
         self._dim_backup_path.unlink(missing_ok=True)
         decky.logger.info("restore_dim | ok=%s restored=%s", result.get("ok"), saved)
         return result
+
+    async def get_lock_screen_settings(self) -> dict[str, Any]:
+        """Return whether a Steam Deck lock screen PIN is configured (never the PIN itself)."""
+        result = read_lock_screen_settings()
+        decky.logger.debug("get_lock_screen_settings | has_pin=%s source=%s", result.get("has_pin"), result.get("source"))
+        return result
+
+    async def lock_screen(self) -> dict[str, Any]:
+        """Lock the Steam Deck screen via loginctl lock-session."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "loginctl", "lock-session",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+            ok = proc.returncode == 0
+            err = (stderr or b"").decode().strip() or None
+            decky.logger.info("lock_screen | ok=%s rc=%s err=%s", ok, proc.returncode, err)
+            return {"ok": ok, "error": err}
+        except Exception as exc:  # noqa: BLE001
+            decky.logger.error("lock_screen | failed: %s", exc)
+            return {"ok": False, "error": str(exc)}
 
     async def nudge_input(self) -> dict[str, Any]:
         """Emit a real input event via uinput to reset gamescope's idle timer."""
