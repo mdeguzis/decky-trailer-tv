@@ -66,7 +66,7 @@ export function TrailerPlayer() {
         const sys  = sc?.System;
         const authKeys = auth ? Object.keys(auth).filter((k: string) => typeof auth[k] === "function") : [];
         const userKeys = user ? Object.keys(user).filter((k: string) => typeof user[k] === "function") : [];
-        void logEvent("DEBUG", "client lock probe", { authKeys: authKeys.join(","), userKeys: userKeys.join(",") });
+        void logEvent("INFO", "client lock probe", { authKeys: authKeys.join(","), userKeys: userKeys.join(","), scKeys: sc ? Object.keys(sc).join(",") : "no SteamClient" });
 
         let locked = false;
         if (typeof auth?.LockSteamWithPIN === "function")      { auth.LockSteamWithPIN();      void logEvent("INFO", "client lock: Auth.LockSteamWithPIN"); locked = true; }
