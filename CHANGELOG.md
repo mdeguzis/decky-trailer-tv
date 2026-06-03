@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] - 2026-06-03
+
+### Fixed
+- Lock screen: switched from `loginctl lock-session` to `loginctl lock-sessions`
+  (plural). The plugin backend runs as root, so the no-arg form resolved to root's
+  session which doesn't exist as a graphical session object. The plural form sends
+  the lock signal to all active sessions, reaching the deck user's game-mode session.
+
 ## [0.5.7] - 2026-06-03
 
 ### Fixed

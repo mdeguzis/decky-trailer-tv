@@ -323,8 +323,13 @@ class Plugin:
             else:
                 env.pop("LD_LIBRARY_PATH", None)
             decky.logger.debug("lock_screen | LD_LIBRARY_PATH stripped to: %s", cleaned or "(unset)")
+            # lock-session (no arg) resolves to the caller's session -- but the
+            # plugin runs as root which has no active graphical session.
+            # lock-sessions (plural) sends the lock signal to every active
+            # session, which on a single-user Steam Deck hits the deck user's
+            # game-mode session.
             proc = await asyncio.create_subprocess_exec(
-                "loginctl", "lock-session",
+                "loginctl", "lock-sessions",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
