@@ -309,38 +309,77 @@ class Plugin:
         return result
 
     async def lock_screen(self) -> dict[str, Any]:
-        """Lock the Steam Deck screen via loginctl lock-session."""
+        """Lock the Steam Deck screen.
+
+        loginctl lock-sessions uses the system D-Bus (org.freedesktop.login1)
+        which Steam game mode doesn't respond to for its PIN lock screen.
+        Instead we call org.freedesktop.ScreenSaver.Lock on the deck user's
+        session bus at /run/user/<uid>/bus, which Steam BPM does implement.
+        Falls back to loginctl if dbus-send fails.
+        """
         import os  # pylint: disable=import-outside-toplevel
-        try:
-            # Decky's PyInstaller bundle prepends /tmp/_MEI* to LD_LIBRARY_PATH.
-            # loginctl links against systemd which requires the system OpenSSL, not
-            # PyInstaller's bundled one -- strip those paths before exec.
-            env = os.environ.copy()
-            lp = env.get("LD_LIBRARY_PATH", "")
+        import pwd  # pylint: disable=import-outside-toplevel
+
+        def _clean_env(base: dict) -> dict:
+            """Strip PyInstaller paths from LD_LIBRARY_PATH."""
+            e = base.copy()
+            lp = e.get("LD_LIBRARY_PATH", "")
             cleaned = ":".join(p for p in lp.split(":") if p and "/tmp/_MEI" not in p)
             if cleaned:
-                env["LD_LIBRARY_PATH"] = cleaned
+                e["LD_LIBRARY_PATH"] = cleaned
             else:
-                env.pop("LD_LIBRARY_PATH", None)
-            decky.logger.debug("lock_screen | LD_LIBRARY_PATH stripped to: %s", cleaned or "(unset)")
-            # lock-session (no arg) resolves to the caller's session -- but the
-            # plugin runs as root which has no active graphical session.
-            # lock-sessions (plural) sends the lock signal to every active
-            # session, which on a single-user Steam Deck hits the deck user's
-            # game-mode session.
+                e.pop("LD_LIBRARY_PATH", None)
+            return e
+
+        # Build a minimal env with the deck user's session bus address.
+        try:
+            uid = pwd.getpwnam("deck").pw_uid
+        except KeyError:
+            uid = 1000
+        session_bus = f"unix:path=/run/user/{uid}/bus"
+        session_env = _clean_env({
+            "PATH": "/usr/bin:/bin",
+            "DBUS_SESSION_BUS_ADDRESS": session_bus,
+        })
+        decky.logger.debug("lock_screen | trying session D-Bus | bus=%s", session_bus)
+        try:
             proc = await asyncio.create_subprocess_exec(
-                "loginctl", "lock-sessions",
+                "dbus-send", "--session",
+                f"--address={session_bus}",
+                "--dest=org.freedesktop.ScreenSaver",
+                "--type=method_call",
+                "/ScreenSaver",
+                "org.freedesktop.ScreenSaver.Lock",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
-                env=env,
+                env=session_env,
             )
             _, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
             ok = proc.returncode == 0
             err = (stderr or b"").decode().strip() or None
-            decky.logger.info("lock_screen | ok=%s rc=%s err=%s", ok, proc.returncode, err)
-            return {"ok": ok, "error": err}
+            decky.logger.info("lock_screen | dbus-send | ok=%s rc=%s err=%s", ok, proc.returncode, err)
+            if ok:
+                return {"ok": True, "method": "dbus-send"}
+            decky.logger.warning("lock_screen | dbus-send failed, falling back to loginctl | err=%s", err)
         except Exception as exc:  # noqa: BLE001
-            decky.logger.error("lock_screen | failed: %s", exc)
+            decky.logger.warning("lock_screen | dbus-send exception, falling back to loginctl | err=%s", exc)
+
+        # Fallback: loginctl lock-sessions (system D-Bus).
+        try:
+            system_env = _clean_env(os.environ.copy())
+            proc = await asyncio.create_subprocess_exec(
+                "loginctl", "lock-sessions",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+                env=system_env,
+            )
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+            ok = proc.returncode == 0
+            err = (stderr or b"").decode().strip() or None
+            decky.logger.info("lock_screen | loginctl | ok=%s rc=%s err=%s", ok, proc.returncode, err)
+            return {"ok": ok, "error": err, "method": "loginctl"}
+        except Exception as exc:  # noqa: BLE001
+            decky.logger.error("lock_screen | loginctl failed | err=%s", exc)
             return {"ok": False, "error": str(exc)}
 
     async def nudge_input(self) -> dict[str, Any]:

@@ -60,32 +60,6 @@ export function TrailerPlayer() {
       if (hasPinRef.current) {
         // Try Steam's own client-side lock API first (loginctl does not reach
         // Steam's internal PIN lock screen in game mode).
-        const sc = (window as any).SteamClient;
-        const auth = sc?.Auth;
-        const user = sc?.User;
-        const sys  = sc?.System;
-        const par  = sc?.Parental;
-        const ui   = sc?.UI;
-        const int_ = sc?._internal;
-        const fn = (o: any) => o ? Object.keys(o).filter((k: string) => typeof o[k] === "function").join(",") : "";
-        void logEvent("INFO", "client lock probe", {
-          systemKeys: fn(sys), parentalKeys: fn(par), uiKeys: fn(ui), internalKeys: fn(int_),
-        });
-
-        let locked = false;
-        if (typeof auth?.LockSteamWithPIN === "function")        { auth.LockSteamWithPIN();        void logEvent("INFO", "client lock: Auth.LockSteamWithPIN"); locked = true; }
-        else if (typeof auth?.LockSteam === "function")          { auth.LockSteam();               void logEvent("INFO", "client lock: Auth.LockSteam"); locked = true; }
-        else if (typeof user?.LockSteam === "function")          { user.LockSteam();               void logEvent("INFO", "client lock: User.LockSteam"); locked = true; }
-        else if (typeof sys?.LockScreen === "function")          { sys.LockScreen();               void logEvent("INFO", "client lock: System.LockScreen"); locked = true; }
-        else if (typeof auth?.StartSignInFromCache === "function") { auth.StartSignInFromCache();  void logEvent("INFO", "client lock: Auth.StartSignInFromCache"); locked = true; }
-        else if (typeof par?.Lock === "function")                { par.Lock();                     void logEvent("INFO", "client lock: Parental.Lock"); locked = true; }
-
-        // When a client method fires, don't also NavigateBack -- the lock/login
-        // transition handles its own navigation. NavigateBack after a FlipToLogin
-        // was cancelling the lock transition.
-        if (locked) return;
-
-        void logEvent("WARNING", "client lock: no known method, falling back to backend");
         void lockScreen().then((r) =>
           logEvent(r.ok ? "INFO" : "WARNING", "lock_screen result", r as object)
         );
