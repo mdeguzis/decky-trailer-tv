@@ -81,6 +81,12 @@ def check_for_update(current_version: str, channel: str = "release") -> dict[str
             )
 
         latest = str(data.get("tag_name", "")).lstrip("v")
+        # On the developer channel the tag is the static "developer"; surface the
+        # release NAME instead ("Developer build (<sha>)") so the frontend can
+        # show the commit and compare it against the locally installed
+        # .build-commit for version matching.
+        if channel == "developer":
+            latest = str(data.get("name") or data.get("tag_name") or "developer")
         zip_asset = next(
             (a for a in data.get("assets", []) if a["name"].endswith(".zip")),
             None,

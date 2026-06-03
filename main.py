@@ -166,6 +166,21 @@ class Plugin:
         """Return the version string Decky knows about."""
         return getattr(decky, "DECKY_PLUGIN_VERSION", "unknown")
 
+    async def get_build_commit(self) -> str:
+        """Return the git commit SHA baked into this build (.build-commit).
+
+        Used by the updater to tell whether the rolling developer build on
+        GitHub is the same commit already installed locally.
+        """
+        try:
+            path = os.path.join(decky.DECKY_PLUGIN_DIR, ".build-commit")
+            if os.path.isfile(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.read().strip() or "dev"
+        except Exception as exc:  # noqa: BLE001
+            decky.logger.warning("get_build_commit: failed | err=%s", exc)
+        return "dev"
+
     async def check_for_update(self, channel: str = "release") -> dict[str, Any]:
         """Check GitHub Releases for a newer version; returns update info dict."""
         current = getattr(decky, "DECKY_PLUGIN_VERSION", "unknown")

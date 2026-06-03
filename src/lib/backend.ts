@@ -31,6 +31,8 @@ export const getPlaylistCount = callable<[], number>("get_playlist_count");
 export const recordPlayedClip = callable<[appid: number, name: string], void>("record_played_clip");
 export const getPlayedHistory = callable<[], { appid: number; name: string }[]>("get_played_history");
 export const getPluginVersion = callable<[], string>("get_plugin_version");
+/** Git commit SHA baked into this build (.build-commit), for update matching. */
+export const getBuildCommit = callable<[], string>("get_build_commit");
 
 export interface UpdateCheckResult {
   success: boolean;

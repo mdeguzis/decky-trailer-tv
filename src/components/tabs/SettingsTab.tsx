@@ -7,6 +7,8 @@ import {
   cancelUpdate,
   getSettings,
   setSettings,
+  getPluginVersion,
+  getBuildCommit,
   logEvent,
 } from "../../lib/backend";
 import type { UpdateCheckResult, UpdateStatus } from "../../lib/backend";
@@ -32,6 +34,8 @@ export function SettingsTab() {
   const [installing, setInstalling] = useState(false);
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [reloading, setReloading] = useState(false);
+  const [version, setVersion] = useState("...");
+  const [buildCommit, setBuildCommit] = useState("");
   const pollRef = useRef<number | null>(null);
 
   // Load the persisted channel so it survives reopening the page.
@@ -39,6 +43,8 @@ export function SettingsTab() {
     void getSettings().then((s) => {
       if (s.updateChannel) setChannel(s.updateChannel);
     });
+    void getPluginVersion().then(setVersion).catch(() => {});
+    void getBuildCommit().then(setBuildCommit).catch(() => {});
   }, []);
 
   const selectChannel = (next: Channel) => {
@@ -137,8 +143,31 @@ export function SettingsTab() {
   const progressPct =
     status?.progress_fraction != null ? Math.round(status.progress_fraction * 100) : null;
 
+  // The developer channel always reports has_update=true (rolling tag). Compare
+  // the commit embedded in the dev label ("Developer build (<sha>)") against the
+  // locally installed .build-commit so we don't offer to reinstall the same
+  // build. Matches decky-proton-pulse.
+  const sameDevBuildAsLocal = (() => {
+    if (!checkResult?.success || channel !== "developer") return false;
+    const m = /\(([0-9a-f]{6,40})(?:\+uncommitted)?\)/i.exec(checkResult.latest_version ?? "");
+    if (!m) return false;
+    const localSha = (buildCommit || "").split("+")[0].toLowerCase();
+    return localSha !== "" && localSha === m[1].toLowerCase();
+  })();
+  const hasUpdate = !!checkResult?.has_update && !sameDevBuildAsLocal;
+
   return (
     <PanelSection title="Updates">
+      <PanelSectionRow>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%" }}>
+          <span style={{ fontSize: 12, color: "#9dc4e8" }}>Installed</span>
+          <span style={{ fontSize: 11, color: "#7a9bb5", fontFamily: "monospace", textAlign: "right" }}>
+            {formatVersion(version)}
+            {buildCommit && <span style={{ color: "#5a7a8f" }}>{"  "}@{buildCommit}</span>}
+          </span>
+        </div>
+      </PanelSectionRow>
+
       <PanelSectionRow>
         <DropdownItem
           label="Channel"
@@ -162,7 +191,7 @@ export function SettingsTab() {
 
       {checkResult && !installing && (
         <>
-          {checkResult.success && checkResult.has_update ? (
+          {checkResult.success && hasUpdate ? (
             <>
               <PanelSectionRow>
                 <div style={{ fontSize: 12, color: "#8dbf40" }}>
@@ -178,7 +207,9 @@ export function SettingsTab() {
           ) : checkResult.success ? (
             <PanelSectionRow>
               <div style={{ fontSize: 12, color: "#888" }}>
-                Up to date ({formatVersion(checkResult.current_version)})
+                {sameDevBuildAsLocal
+                  ? `Up to date (${checkResult.latest_version})`
+                  : `Up to date (${formatVersion(checkResult.current_version)})`}
               </div>
             </PanelSectionRow>
           ) : (

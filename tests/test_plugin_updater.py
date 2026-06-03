@@ -39,6 +39,23 @@ def test_non_404_http_error_reports_status():
     assert "503" in result["error"]
 
 
+def test_developer_channel_surfaces_release_name_with_commit():
+    data = {
+        "tag_name": "developer",
+        "name": "Developer build (abc1234)",
+        "html_url": "https://gh/dev",
+        "body": "rolling",
+        "assets": [{"name": "x-dev.zip", "browser_download_url": "https://gh/x.zip", "size": 10}],
+    }
+    with mock.patch.object(plugin_updater, "curl_json", return_value=data):
+        res = plugin_updater.check_for_update("0.5.1", channel="developer")
+    assert res["success"] is True
+    # latest_version is the release NAME (with commit), not the static "developer"
+    # tag, so the frontend can compare it against the local .build-commit.
+    assert res["latest_version"] == "Developer build (abc1234)"
+    assert res["has_update"] is True  # asset exists
+
+
 def test_list_releases_maps_rows_and_filters_rolling_developer_tag():
     raw = [
         {"tag_name": "v0.4.0", "name": "Trailer TV v0.4.0", "body": "## Changes\n- x",

@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { DialogButton, Navigation } from "@decky/ui";
+import { DialogButton } from "@decky/ui";
 import { getPlayedHistory, logEvent } from "../../lib/backend";
+import { openStorePage } from "../../lib/steamStore";
 import { TrailerListView } from "./TrailerListView";
-
-const STORE_URL = (appid: number) => `https://store.steampowered.com/app/${appid}`;
 
 export function HistoryTab() {
   const [history, setHistory] = useState<{ appid: number; name: string }[]>([]);
@@ -35,11 +34,7 @@ export function HistoryTab() {
           <DialogButton
             style={{ width: 120, minWidth: 120, flexShrink: 0, fontSize: 12 }}
             onClick={() => {
-              try {
-                Navigation.NavigateToExternalWeb(STORE_URL(entry.appid));
-              } catch {
-                /* ignore */
-              }
+              openStorePage(entry.appid);
               logEvent("DEBUG", "history tab: open store page", { appid: entry.appid });
             }}
           >

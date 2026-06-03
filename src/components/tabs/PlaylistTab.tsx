@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DialogButton, Navigation } from "@decky/ui";
+import { DialogButton } from "@decky/ui";
 import {
   getPlaylist,
   refreshPlaylist,
@@ -7,9 +7,8 @@ import {
   logEvent,
 } from "../../lib/backend";
 import type { TrailerClip } from "../../lib/types";
+import { openStorePage } from "../../lib/steamStore";
 import { TrailerListView } from "./TrailerListView";
-
-const STORE_URL = (appid: number) => `https://store.steampowered.com/app/${appid}`;
 
 export function PlaylistTab() {
   const [clips, setClips] = useState<TrailerClip[]>([]);
@@ -73,11 +72,7 @@ export function PlaylistTab() {
           <DialogButton
             style={{ width: 120, minWidth: 120, flexShrink: 0, fontSize: 12 }}
             onClick={() => {
-              try {
-                Navigation.NavigateToExternalWeb(STORE_URL(clip.appid));
-              } catch {
-                /* ignore */
-              }
+              openStorePage(clip.appid);
               logEvent("DEBUG", "playlist tab: open store page", { appid: clip.appid });
             }}
           >

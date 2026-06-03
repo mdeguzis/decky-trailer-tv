@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-06-02
+
+### Fixed
+- Store buttons now open the in-Steam store page (steam://store deep link, with
+  the in-Steam browser as fallback) instead of an external browser that did
+  nothing in Game Mode.
+
+### Added
+- Updater shows the installed version and baked-in git commit (.build-commit via
+  a new get_build_commit reader), and on the developer channel compares that
+  commit against the rolling build so it reports "Up to date" instead of
+  offering to reinstall the same commit. The developer label now surfaces
+  "Developer build (<sha>)". Mirrors decky-proton-pulse.
+
 ## [0.5.1] - 2026-06-02
 
 ### Fixed
