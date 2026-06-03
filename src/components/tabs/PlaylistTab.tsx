@@ -76,23 +76,21 @@ export function PlaylistTab() {
           : `${clips.length} ${clips.length === 1 ? "trailer" : "trailers"} loaded`
       }
       action={
-        <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <DropdownItem
-              label="Source"
-              rgOptions={SOURCE_OPTIONS.map((o) => ({ data: o.data, label: o.label }))}
-              selectedOption={source}
-              onChange={(o) => void handleSourceChange(o.data as TrailerSource)}
-            />
-          </div>
-          <DialogButton
-            style={{ width: 130, minWidth: 130, flexShrink: 0, fontSize: 12 }}
-            disabled={building}
-            onClick={() => void handleRefresh()}
-          >
-            {building ? "Refreshing..." : "Refresh"}
-          </DialogButton>
-        </div>
+        <DialogButton
+          style={{ width: 130, minWidth: 130, flexShrink: 0, fontSize: 12 }}
+          disabled={building}
+          onClick={() => void handleRefresh()}
+        >
+          {building ? "Refreshing..." : "Refresh"}
+        </DialogButton>
+      }
+      toolbar={
+        <DropdownItem
+          label="Source"
+          rgOptions={SOURCE_OPTIONS.map((o) => ({ data: o.data, label: o.label }))}
+          selectedOption={source}
+          onChange={(o) => void handleSourceChange(o.data as TrailerSource)}
+        />
       }
       loading={loading}
       emptyText="No trailers loaded yet. Press Refresh to build the playlist."
