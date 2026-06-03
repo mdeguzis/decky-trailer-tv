@@ -1,6 +1,6 @@
 [project]
 name = "decky-trailer-tv"
-version = "0.5.12"
+version = "0.5.13"
 description = "Trailer TV Decky plugin backend"
 requires-python = ">=3.11"
 dependencies = [
