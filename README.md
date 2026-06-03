@@ -13,7 +13,7 @@ handles its own display. The plugin just keeps playing trailers until you press 
 
 ## Usage
 
-1. Install via the Decky store or manually
+1. Install via the releases page ZIP (latest) for the first time. After this, you can use the built-in updater
 2. The screensaver activates after your configured idle time
 3. Press any button or touch the screen to dismiss
 4. Use the Quick Access Menu (QAM) to change the trailer source, audio, and idle timeout
