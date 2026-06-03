@@ -344,8 +344,7 @@ class Plugin:
         decky.logger.debug("lock_screen | trying session D-Bus | bus=%s", session_bus)
         try:
             proc = await asyncio.create_subprocess_exec(
-                "dbus-send", "--session",
-                f"--address={session_bus}",
+                "dbus-send", f"--bus={session_bus}",
                 "--dest=org.freedesktop.ScreenSaver",
                 "--type=method_call",
                 "/ScreenSaver",
