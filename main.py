@@ -310,11 +310,24 @@ class Plugin:
 
     async def lock_screen(self) -> dict[str, Any]:
         """Lock the Steam Deck screen via loginctl lock-session."""
+        import os  # pylint: disable=import-outside-toplevel
         try:
+            # Decky's PyInstaller bundle prepends /tmp/_MEI* to LD_LIBRARY_PATH.
+            # loginctl links against systemd which requires the system OpenSSL, not
+            # PyInstaller's bundled one -- strip those paths before exec.
+            env = os.environ.copy()
+            lp = env.get("LD_LIBRARY_PATH", "")
+            cleaned = ":".join(p for p in lp.split(":") if p and "/tmp/_MEI" not in p)
+            if cleaned:
+                env["LD_LIBRARY_PATH"] = cleaned
+            else:
+                env.pop("LD_LIBRARY_PATH", None)
+            decky.logger.debug("lock_screen | LD_LIBRARY_PATH stripped to: %s", cleaned or "(unset)")
             proc = await asyncio.create_subprocess_exec(
                 "loginctl", "lock-session",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
             _, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
             ok = proc.returncode == 0

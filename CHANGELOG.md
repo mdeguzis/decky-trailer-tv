@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2026-06-03
+
+### Fixed
+- Lock screen now actually fires: Decky's PyInstaller bundle was prepending
+  `/tmp/_MEI*` to `LD_LIBRARY_PATH`, causing `loginctl` to load the wrong
+  OpenSSL and fail with an OPENSSL_3.4.0 symbol error. The lock_screen backend
+  now strips those paths before exec so the system loginctl links against the
+  correct systemd OpenSSL.
+
 ## [0.5.6] - 2026-06-03
 
 ### Fixed
