@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2026-06-03
+
+### Fixed
+- Lock screen on screensaver exit now works correctly: the regex used to parse
+  `LockScreenSettings` from `config.vdf` stopped at the first escaped quote
+  inside the JSON blob, so `has_pin` was always `False`. Fixed to handle both
+  the JSON-blob format (with escaped inner quotes) and the VDF nested-block
+  format. Tests added for both formats and for the empty-PIN and absent-key
+  cases.
+
 ## [0.5.5] - 2026-06-03
 
 ### Added

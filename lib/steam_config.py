@@ -72,6 +72,7 @@ def read_lock_screen_settings() -> dict[str, object]:
     non-empty. Never exposes the PIN value itself.
     """
     import json as _json  # pylint: disable=import-outside-toplevel
+    import decky  # type: ignore[import-untyped]  # pylint: disable=import-error,import-outside-toplevel
     path = find_config_vdf()
     if path is None:
         return {"has_pin": False, "source": None}
@@ -79,15 +80,35 @@ def read_lock_screen_settings() -> dict[str, object]:
         text = path.read_text(errors="ignore")
     except OSError:
         return {"has_pin": False, "source": str(path)}
-    m = re.search(r'"LockScreenSettings"\s+"({[^"]+})"', text)
-    if not m:
-        return {"has_pin": False, "source": str(path)}
-    try:
-        settings = _json.loads(m.group(1).replace('\\"', '"'))
-        has_pin = bool(settings.get("strPIN", ""))
+
+    # Format 1: JSON blob stored as escaped VDF string value.
+    # "LockScreenSettings"  "{\"strPIN\":\"1234\",...}"
+    # [^"\\] matches non-quote non-backslash; \\. matches any escape sequence.
+    m = re.search(r'"LockScreenSettings"\s+"((?:[^"\\]|\\.)*)"', text)
+    if m:
+        try:
+            raw = m.group(1).replace('\\"', '"').replace('\\\\', '\\')
+            settings = _json.loads(raw)
+            has_pin = bool(settings.get("strPIN", ""))
+            decky.logger.debug(
+                "read_lock_screen_settings: JSON blob | has_pin=%s keys=%s",
+                has_pin, list(settings.keys()),
+            )
+            return {"has_pin": has_pin, "source": str(path)}
+        except (ValueError, KeyError) as exc:
+            decky.logger.warning("read_lock_screen_settings: JSON parse failed | err=%s", exc)
+
+    # Format 2: VDF nested block.
+    # "LockScreenSettings" { "strPIN" "1234" }
+    m2 = re.search(r'"LockScreenSettings"\s*\{([^}]*)\}', text, re.DOTALL)
+    if m2:
+        pin_m = re.search(r'"strPIN"\s+"([^"]*)"', m2.group(1))
+        has_pin = bool(pin_m and pin_m.group(1))
+        decky.logger.debug("read_lock_screen_settings: VDF block | has_pin=%s", has_pin)
         return {"has_pin": has_pin, "source": str(path)}
-    except (ValueError, KeyError):
-        return {"has_pin": False, "source": str(path)}
+
+    decky.logger.debug("read_lock_screen_settings: LockScreenSettings not found in config.vdf")
+    return {"has_pin": False, "source": str(path)}
 
 
 def write_dim_seconds(battery: int | None, ac: int | None) -> dict[str, object]:
