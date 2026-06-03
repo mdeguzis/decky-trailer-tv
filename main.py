@@ -66,6 +66,9 @@ class Plugin:
         if self._dim_backup_path.exists():
             decky.logger.warning("dim backup found on start -- restoring user's dim settings")
             await self.restore_dim()
+        # Log lock screen state so it's visible in logs without triggering the screensaver.
+        lock = read_lock_screen_settings()
+        decky.logger.info("lock screen | has_pin=%s source=%s", lock.get("has_pin"), lock.get("source"))
         # Pre-warm the playlist so it's ready before the screensaver first fires.
         await self.refresh_playlist()
 

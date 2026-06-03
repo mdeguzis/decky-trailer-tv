@@ -9,7 +9,7 @@ import {
   SliderField,
   Focusable,
 } from "@decky/ui";
-import { getSettings, setSettings } from "../lib/backend";
+import { getSettings, setSettings, getLockScreenSettings } from "../lib/backend";
 import type { Settings, TrailerSource, KeepAwakeStrategy } from "../lib/types";
 import { setPendingSettingsTab } from "../lib/settingsNav";
 
@@ -35,10 +35,12 @@ function formatLastFired(ms: number | null): string {
 /** Live status panel, shown only when debug is enabled. Polls the watcher. */
 function DebugStats() {
   const [status, setStatus] = useState<Status | null>(null);
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
   useEffect(() => {
     const tick = () => setStatus(window.__TRAILER_TV_STATUS__?.() ?? null);
     tick();
     const id = window.setInterval(tick, 1000);
+    void getLockScreenSettings().then((s) => setHasPin(s.has_pin));
     return () => window.clearInterval(id);
   }, []);
 
@@ -78,6 +80,7 @@ function DebugStats() {
       </div>
       <div>last fired:</div>
       <div>{formatLastFired(status.lastFiredAt)}</div>
+      <div>lock on exit: {hasPin === null ? "..." : hasPin ? "yes (PIN set)" : "no"}</div>
     </div>
   );
 }
