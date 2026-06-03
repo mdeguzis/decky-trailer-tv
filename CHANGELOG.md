@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.9] - 2026-06-03
+
+### Fixed
+- Lock screen now fires before navigation: previously NavigateBack() ran first
+  and Steam transitioned to the library before loginctl could send the lock
+  signal. Lock is now awaited and NavigateBack() only runs after the lock
+  command completes.
+
 ## [0.5.8] - 2026-06-03
 
 ### Fixed

@@ -57,13 +57,16 @@ export function TrailerPlayer() {
       if (exited || Date.now() < armAt || exitSuppressed()) return;
       exited = true;
       logEvent("INFO", "screensaver exited by input", { source, lockPending: hasPinRef.current });
-      Navigation.NavigateBack();
-      // If a Steam Deck lock PIN is configured, lock the screen so the device
-      // can't be accessed without the PIN after dismissing the screensaver.
+      // Lock BEFORE navigating back: if we NavigateBack() first, Steam has
+      // already transitioned to the library by the time loginctl fires and
+      // the lock signal is ignored.
       if (hasPinRef.current) {
-        void lockScreen().then((r) =>
-          logEvent(r.ok ? "INFO" : "WARNING", "lock_screen result", r as object)
-        );
+        void lockScreen().then((r) => {
+          logEvent(r.ok ? "INFO" : "WARNING", "lock_screen result", r as object);
+          Navigation.NavigateBack();
+        });
+      } else {
+        Navigation.NavigateBack();
       }
     };
 
