@@ -337,21 +337,22 @@ class Plugin:
         except KeyError:
             uid = 1000
         session_bus = f"unix:path=/run/user/{uid}/bus"
-        session_env = _clean_env({
-            "PATH": "/usr/bin:/bin",
-            "DBUS_SESSION_BUS_ADDRESS": session_bus,
-        })
-        decky.logger.debug("lock_screen | trying session D-Bus | bus=%s", session_bus)
+        decky.logger.debug("lock_screen | trying session D-Bus | bus=%s uid=%s", session_bus, uid)
         try:
+            # Must run as the deck user -- root cannot connect to the user's
+            # session bus. su -c runs a login shell as deck with the bus address set.
+            dbus_cmd = (
+                f"DBUS_SESSION_BUS_ADDRESS={session_bus} "
+                "dbus-send --session "
+                "--dest=org.freedesktop.ScreenSaver "
+                "--type=method_call "
+                "/ScreenSaver "
+                "org.freedesktop.ScreenSaver.Lock"
+            )
             proc = await asyncio.create_subprocess_exec(
-                "dbus-send", f"--bus={session_bus}",
-                "--dest=org.freedesktop.ScreenSaver",
-                "--type=method_call",
-                "/ScreenSaver",
-                "org.freedesktop.ScreenSaver.Lock",
+                "su", "-", "deck", "-c", dbus_cmd,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
-                env=session_env,
             )
             _, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
             ok = proc.returncode == 0
