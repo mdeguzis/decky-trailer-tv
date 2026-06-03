@@ -76,14 +76,13 @@ export function PlaylistTab() {
           : `${clips.length} ${clips.length === 1 ? "trailer" : "trailers"} loaded`
       }
       action={
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ width: 150, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <DropdownItem
-              label=""
+              label="Source"
               rgOptions={SOURCE_OPTIONS.map((o) => ({ data: o.data, label: o.label }))}
               selectedOption={source}
               onChange={(o) => void handleSourceChange(o.data as TrailerSource)}
-              strDefaultLabel="Source"
             />
           </div>
           <DialogButton

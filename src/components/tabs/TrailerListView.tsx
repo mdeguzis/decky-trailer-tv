@@ -52,8 +52,8 @@ export function TrailerListView({
   return (
     <Focusable style={{ display: "flex", flexDirection: "column", padding: 8 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#e8f4ff" }}>{title}</div>
-        {action}
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#e8f4ff", flexShrink: 0 }}>{title}</div>
+        <div style={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1, justifyContent: "flex-end", marginLeft: 8 }}>{action}</div>
       </div>
 
       {loading ? (
