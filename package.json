@@ -1,6 +1,6 @@
 {
   "name": "decky-trailer-tv",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "description": "Idle screensaver that plays random featured Steam store game trailers, reviving the old SteamOS Trailer TV.",
   "type": "module",
   "scripts": {

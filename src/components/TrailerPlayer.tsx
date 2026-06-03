@@ -57,14 +57,31 @@ export function TrailerPlayer() {
       if (exited || Date.now() < armAt || exitSuppressed()) return;
       exited = true;
       logEvent("INFO", "screensaver exited by input", { source, lockPending: hasPinRef.current });
-      // Lock BEFORE navigating back: if we NavigateBack() first, Steam has
-      // already transitioned to the library by the time loginctl fires and
-      // the lock signal is ignored.
       if (hasPinRef.current) {
-        void lockScreen().then((r) => {
-          logEvent(r.ok ? "INFO" : "WARNING", "lock_screen result", r as object);
-          Navigation.NavigateBack();
-        });
+        // Try Steam's own client-side lock API first (loginctl does not reach
+        // Steam's internal PIN lock screen in game mode).
+        const sc = (window as any).SteamClient;
+        const auth = sc?.Auth;
+        const user = sc?.User;
+        const sys  = sc?.System;
+        const authKeys = auth ? Object.keys(auth).filter((k: string) => typeof auth[k] === "function") : [];
+        const userKeys = user ? Object.keys(user).filter((k: string) => typeof user[k] === "function") : [];
+        void logEvent("DEBUG", "client lock probe", { authKeys: authKeys.join(","), userKeys: userKeys.join(",") });
+
+        let locked = false;
+        if (typeof auth?.LockSteamWithPIN === "function")      { auth.LockSteamWithPIN();      void logEvent("INFO", "client lock: Auth.LockSteamWithPIN"); locked = true; }
+        else if (typeof auth?.LockSteam === "function")        { auth.LockSteam();             void logEvent("INFO", "client lock: Auth.LockSteam"); locked = true; }
+        else if (typeof user?.LockSteam === "function")        { user.LockSteam();             void logEvent("INFO", "client lock: User.LockSteam"); locked = true; }
+        else if (typeof sys?.LockScreen === "function")        { sys.LockScreen();             void logEvent("INFO", "client lock: System.LockScreen"); locked = true; }
+
+        if (!locked) {
+          // No known Steam client lock API found; fall back to loginctl.
+          void logEvent("WARNING", "client lock: no known method, falling back to backend");
+          void lockScreen().then((r) =>
+            logEvent(r.ok ? "INFO" : "WARNING", "lock_screen result", r as object)
+          );
+        }
+        Navigation.NavigateBack();
       } else {
         Navigation.NavigateBack();
       }

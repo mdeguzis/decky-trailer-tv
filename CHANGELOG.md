@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.10] - 2026-06-03
+
+### Fixed
+- Lock screen: loginctl succeeds but Steam's game-mode PIN screen is an internal
+  Steam feature that does not respond to the system lock-sessions D-Bus signal.
+  Now calls Steam's own client API (Auth.LockSteamWithPIN, Auth.LockSteam,
+  User.LockSteam, System.LockScreen tried in order) with loginctl as a fallback.
+  Logs the available method names at exit time for diagnosis.
+
 ## [0.5.9] - 2026-06-03
 
 ### Fixed
