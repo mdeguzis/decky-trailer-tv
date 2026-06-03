@@ -64,18 +64,23 @@ export function TrailerPlayer() {
         const auth = sc?.Auth;
         const user = sc?.User;
         const sys  = sc?.System;
-        const authKeys = auth ? Object.keys(auth).filter((k: string) => typeof auth[k] === "function") : [];
-        const userKeys = user ? Object.keys(user).filter((k: string) => typeof user[k] === "function") : [];
-        void logEvent("INFO", "client lock probe", { authKeys: authKeys.join(","), userKeys: userKeys.join(","), scKeys: sc ? Object.keys(sc).join(",") : "no SteamClient" });
+        const par  = sc?.Parental;
+        const ui   = sc?.UI;
+        const int_ = sc?._internal;
+        const fn = (o: any) => o ? Object.keys(o).filter((k: string) => typeof o[k] === "function").join(",") : "";
+        void logEvent("INFO", "client lock probe", {
+          systemKeys: fn(sys), parentalKeys: fn(par), uiKeys: fn(ui), internalKeys: fn(int_),
+        });
 
         let locked = false;
         if (typeof auth?.LockSteamWithPIN === "function")      { auth.LockSteamWithPIN();      void logEvent("INFO", "client lock: Auth.LockSteamWithPIN"); locked = true; }
         else if (typeof auth?.LockSteam === "function")        { auth.LockSteam();             void logEvent("INFO", "client lock: Auth.LockSteam"); locked = true; }
         else if (typeof user?.LockSteam === "function")        { user.LockSteam();             void logEvent("INFO", "client lock: User.LockSteam"); locked = true; }
         else if (typeof sys?.LockScreen === "function")        { sys.LockScreen();             void logEvent("INFO", "client lock: System.LockScreen"); locked = true; }
+        else if (typeof user?.FlipToLogin === "function")      { user.FlipToLogin();           void logEvent("INFO", "client lock: User.FlipToLogin"); locked = true; }
+        else if (typeof par?.Lock === "function")              { par.Lock();                   void logEvent("INFO", "client lock: Parental.Lock"); locked = true; }
 
         if (!locked) {
-          // No known Steam client lock API found; fall back to loginctl.
           void logEvent("WARNING", "client lock: no known method, falling back to backend");
           void lockScreen().then((r) =>
             logEvent(r.ok ? "INFO" : "WARNING", "lock_screen result", r as object)
