@@ -38,27 +38,23 @@ const DIM: React.CSSProperties = { fontSize: 12, color: "#888", padding: "8px 4p
 export function TrailerListView({
   title,
   action,
-  toolbar,
   items,
   emptyText,
   loading,
 }: {
   title: ReactNode;
-  /** Button at the top-right of the header row (e.g. Refresh). */
+  /** Controls rendered at the top-right of the header row. */
   action?: ReactNode;
-  /** Optional row rendered below the header, before the list (e.g. source picker). */
-  toolbar?: ReactNode;
   items: TrailerListItem[];
   emptyText: string;
   loading?: boolean;
 }) {
   return (
     <Focusable style={{ display: "flex", flexDirection: "column", padding: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: toolbar ? 4 : 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#e8f4ff" }}>{title}</div>
         {action}
       </div>
-      {toolbar && <div style={{ marginBottom: 8 }}>{toolbar}</div>}
 
       {loading ? (
         <div style={DIM}>Loading...</div>
