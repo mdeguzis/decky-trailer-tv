@@ -38,6 +38,7 @@ const DIM: React.CSSProperties = { fontSize: 12, color: "#888", padding: "8px 4p
 export function TrailerListView({
   title,
   action,
+  subheader,
   items,
   emptyText,
   loading,
@@ -45,16 +46,19 @@ export function TrailerListView({
   title: ReactNode;
   /** Controls rendered at the top-right of the header row. */
   action?: ReactNode;
+  /** Full-width row rendered below the header, e.g. a source dropdown. */
+  subheader?: ReactNode;
   items: TrailerListItem[];
   emptyText: string;
   loading?: boolean;
 }) {
   return (
     <Focusable style={{ display: "flex", flexDirection: "column", padding: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: subheader ? 6 : 10 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#e8f4ff" }}>{title}</div>
         {action}
       </div>
+      {subheader && <div style={{ marginBottom: 10 }}>{subheader}</div>}
 
       {loading ? (
         <div style={DIM}>Loading...</div>

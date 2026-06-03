@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DialogButton } from "@decky/ui";
+import { DialogButton, DropdownItem } from "@decky/ui";
 import {
   getPlaylist,
   refreshPlaylist,
@@ -61,9 +61,8 @@ export function PlaylistTab() {
     // The mounted poll above reflects progress; no separate poll needed.
   };
 
-  const cycleSource = async () => {
-    const idx = SOURCE_OPTIONS.findIndex((o) => o.data === source);
-    const next = SOURCE_OPTIONS[(idx + 1) % SOURCE_OPTIONS.length].data;
+  const handleSourceChange = async (next: TrailerSource) => {
+    if (next === source) return;
     setSource(next);
     logEvent("INFO", "playlist tab: source changed", { source: next });
     await setSettings({ source: next });
@@ -78,22 +77,22 @@ export function PlaylistTab() {
           : `${clips.length} ${clips.length === 1 ? "trailer" : "trailers"} loaded`
       }
       action={
-        <div style={{ display: "flex", gap: 8 }}>
-          <DialogButton
-            style={{ width: 120, minWidth: 120, flexShrink: 0, fontSize: 12 }}
-            disabled={building}
-            onClick={() => void cycleSource()}
-          >
-            {SOURCE_OPTIONS.find((o) => o.data === source)?.label ?? source}
-          </DialogButton>
-          <DialogButton
-            style={{ width: 120, minWidth: 120, flexShrink: 0, fontSize: 12 }}
-            disabled={building}
-            onClick={() => void handleRefresh()}
-          >
-            {building ? "Refreshing..." : "Refresh"}
-          </DialogButton>
-        </div>
+        <DialogButton
+          style={{ width: 110, minWidth: 110, flexShrink: 0, fontSize: 12 }}
+          disabled={building}
+          onClick={() => void handleRefresh()}
+        >
+          {building ? "Refreshing..." : "Refresh"}
+        </DialogButton>
+      }
+      subheader={
+        <DropdownItem
+          label="Source"
+          rgOptions={SOURCE_OPTIONS.map((o) => ({ data: o.data, label: o.label }))}
+          selectedOption={source}
+          onChange={(o) => void handleSourceChange(o.data as TrailerSource)}
+          disabled={building}
+        />
       }
       loading={loading}
       emptyText="No trailers loaded yet. Press Refresh to build the playlist."

@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.17] - 2026-06-03
+
+### Fixed
+- Lock screen now works: backend sends org.freedesktop.ScreenSaver.Lock on the
+  deck user's session bus (/run/user/1000/bus) via su, since root cannot connect
+  to the user's session bus directly. dbus-send runs as the deck user.
+
+### Changed
+- Playlist tab source selector is a proper dropdown (DropdownItem) again instead
+  of a cycle button. Moved to a full-width row below the title so it is never
+  truncated. Refresh button stays in the header.
+
 ## [0.5.10] - 2026-06-03
 
 ### Fixed
