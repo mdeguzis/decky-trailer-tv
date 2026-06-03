@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-06-03
+
+### Fixed
+- Source dropdown in Trailer Playlist tab no longer gets squished; wrapped in a
+  sized container so the selected label renders fully.
+
 ## [0.5.3] - 2026-06-03
 
 ### Added
