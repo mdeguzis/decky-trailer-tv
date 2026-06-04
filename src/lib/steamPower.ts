@@ -17,6 +17,35 @@ const MIN_IDLE_SEC = 30;
 let onAC = true; // optimistic default so docked users aren't blocked at boot
 let unregister: { unregister: () => void } | null = null;
 
+// Track apps that are launching but not yet in GetRunningApps(). bRunning fires
+// the moment Steam starts a launch, before the process is registered as running.
+const launchingApps = new Set<number>();
+let lifetimeReg: { unregister: () => void } | null = null;
+
+export function startAppLifetimeTracking(): void {
+  try {
+    lifetimeReg = SteamClient.GameSessions?.RegisterForAppLifetimeNotifications?.(
+      (data: { unAppID: number; bRunning: boolean }) => {
+        if (data.bRunning) {
+          launchingApps.add(data.unAppID);
+          logEvent("DEBUG", "app lifetime: launching", { appId: data.unAppID });
+        } else {
+          launchingApps.delete(data.unAppID);
+          logEvent("DEBUG", "app lifetime: stopped", { appId: data.unAppID });
+        }
+      }
+    ) ?? null;
+  } catch (e) {
+    logEvent("WARNING", "app lifetime tracking unavailable", { reason: String(e) });
+  }
+}
+
+export function stopAppLifetimeTracking(): void {
+  try { lifetimeReg?.unregister(); } catch { /* ignore */ }
+  lifetimeReg = null;
+  launchingApps.clear();
+}
+
 /** Subscribe to AC/battery changes. eACState: 2 = connected to power. */
 export function startPowerTracking(): void {
   try {
@@ -178,10 +207,12 @@ export function startBrightnessAudit(onChange: (data: any) => void): () => void 
 }
 
 /**
- * True if a game/app is currently running. Trailer TV must never take over the
- * screen during gameplay. Uses the same SteamClient call decky-proton-pulse uses.
+ * True if a game/app is currently running or launching. Trailer TV must never
+ * take over the screen during gameplay. Checks both GetRunningApps() (confirmed
+ * running) and the lifetime tracker (launching but not yet registered).
  */
 export function isGameRunning(): boolean {
+  if (launchingApps.size > 0) return true;
   try {
     const apps = SteamClient.GameSessions?.GetRunningApps?.() ?? [];
     return Array.isArray(apps) && apps.length > 0;

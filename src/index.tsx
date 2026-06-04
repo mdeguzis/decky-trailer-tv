@@ -9,6 +9,8 @@ import { startSteamSpy } from "./lib/steamSpy";
 import {
   startPowerTracking,
   stopPowerTracking,
+  startAppLifetimeTracking,
+  stopAppLifetimeTracking,
   computeIdleSeconds,
   decideIdle,
   isGameRunning,
@@ -98,6 +100,7 @@ function startIdleWatcher() {
       .catch((e) => logEvent("WARNING", "idle settings load failed", { reason: String(e) }));
   loadIdle();
   startPowerTracking();
+  startAppLifetimeTracking();
   // Let the QAM force an immediate settings reload (so debug/state reflect toggles
   // right away instead of waiting for the 15s poll).
   window.__TRAILER_TV_RELOAD__ = loadIdle;
@@ -226,6 +229,7 @@ function startIdleWatcher() {
     window.clearInterval(tick);
     window.clearInterval(settingsPoll);
     stopPowerTracking();
+    stopAppLifetimeTracking();
     delete window.__TRAILER_TV_START__;
     delete window.__TRAILER_TV_STOP__;
     delete window.__TRAILER_TV_ON_EXIT__;

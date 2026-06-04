@@ -82,7 +82,7 @@ export function QamPanel() {
       </PanelSectionRow>
       {/* Manual trigger: launches the player so you can watch the loaded trailers. */}
       <PanelSectionRow>
-        <ButtonItem layout="below" onClick={() => Navigation.Navigate(ROUTE)}>
+        <ButtonItem layout="below" onClick={() => window.__TRAILER_TV_START__?.() ?? Navigation.Navigate(ROUTE)}>
           Play now
         </ButtonItem>
       </PanelSectionRow>
