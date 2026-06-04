@@ -46,17 +46,15 @@ With no PIN set, dismissing the screensaver drops you back to your library.
 
 ## Known limitations
 
-Screen dim on Steam Deck: the plugin tries to prevent Steam's backlight dim and
-screen-off using a periodic uinput nudge. It does not always win. On battery especially,
-Steam's dim settings can still kick in and override it.
+Screen dim on Steam Deck: while a trailer plays, the Deck still dims its own screen after
+the idle timeout. That dim is gamescope (the Deck's compositor) lowering the backlight on
+its own timer, and a plugin cannot override it. The input nudge, brightness write-back, the
+Steam dim setting, and the browser wake lock were all tried, and none of them stop it. The
+full write-up is in docs/dim-prevention-attempts.md.
 
-This is mostly a non-issue in the living-room setup the plugin targets. If your Deck is
-docked and connected to a TV, the TV controls its own power and backlight separately from
-the Deck. Trailers keep running on the TV. The Deck screen may dim on its own, but you
-are watching the TV anyway.
-
-If the display does dim on you, try setting "Start after idle" to fire before Steam's dim
-kicks in, or switch to the "settings" keep-awake strategy in the debug panel.
+It does not matter for the docked setup the plugin targets. With the Deck connected to a TV,
+the TV drives its own display and the trailers keep playing there. Only the Deck's own panel
+dims, and you are looking at the TV.
 
 ## How it works
 

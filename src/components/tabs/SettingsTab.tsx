@@ -16,6 +16,7 @@ import type { UpdateChannel } from "../../lib/types";
 import { formatVersion } from "../../lib/formatVersion";
 import { triggerReload } from "../../lib/updateReload";
 import { showReleaseNotesModal } from "../ReleaseNotesModal";
+import { DebugSection } from "../DebugSection";
 
 const PLUGIN_NAME = "decky-trailer-tv";
 
@@ -157,6 +158,7 @@ export function SettingsTab() {
   const hasUpdate = !!checkResult?.has_update && !sameDevBuildAsLocal;
 
   return (
+    <>
     <PanelSection title="Updates">
       <PanelSectionRow>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", width: "100%" }}>
@@ -259,5 +261,7 @@ export function SettingsTab() {
         </PanelSectionRow>
       )}
     </PanelSection>
+    <DebugSection />
+    </>
   );
 }

@@ -4,7 +4,7 @@
 // (disableIdleBacklightDim / restoreIdleBacklightDim) which goes through Steam's
 // own settingsStore so the change reaches gamescope live.
 
-import { logEvent } from "./backend";
+import { logEvent, getDimSettings } from "./backend";
 
 // SteamClient and settingsStore are injected into the SteamUI global scope.
 declare const SteamClient: any;
@@ -287,79 +287,130 @@ export function lockSteamScreen(): { ok: boolean; locked: boolean; error?: strin
   }
 }
 
-// --- Idle backlight dim (the "settings" keep-awake strategy) -------------
-// SteamUI writes the dim timeout via settingsStore.SetIdleBacklightDimSeconds,
-// which serializes a settings protobuf and pushes it through
-// SteamClient.System.UpdateSettings -- the SAME path the OS "Dim after" slider
-// uses, so gamescope applies it live. (Writing IdleBacklightDim* to config.vdf
-// is persistence only; gamescope does not re-read it without this IPC push.)
+// --- Idle dim + adaptive brightness (the "settings" keep-awake strategy) ---
+// The Deck fades the backlight on an idle timeout owned by gamescope. The only
+// thing that changes it live is the msettings protobuf pushed via
+// SteamClient.System.UpdateSettings -- the exact call the OS "Dim after" slider
+// and the adaptive-brightness toggle make internally. The store wrapper that
+// normally builds it (m.Get().SetIdleBacklightDimSeconds) isn't reachable from
+// the plugin context, so we build the protobuf by hand. UpdateSettings MERGES
+// (the slider sends a single field), so sending only these fields is safe:
+//   field 1: idle_backlight_dim_battery_seconds (varint seconds)
+//   field 2: idle_backlight_dim_ac_seconds (varint seconds)
+//   field 7: display_adaptive_brightness_enabled (varint bool)
 const DIM_DISABLED_SECONDS = 86400; // 24h ~= "never" for the length of a session
 const DIM_BACKUP_KEY = "trailerTV.idleDimBackup";
+const FIELD_DIM_BATTERY = 1;
+const FIELD_DIM_AC = 2;
+const FIELD_ADAPTIVE_BRIGHTNESS = 7;
 
-interface IdleDimValues {
-  ac: number | null;
-  battery: number | null;
+interface DimBackup {
+  dimBattery: number | null;
+  dimAc: number | null;
+  adaptive: boolean | null;
 }
 
-function readIdleBacklightDim(): IdleDimValues {
-  try {
-    const cs = (window as any).settingsStore?.m_ClientSettings;
-    if (!cs) return { ac: null, battery: null };
-    const num = (v: unknown) => (typeof v === "number" ? v : null);
-    return {
-      ac: num(cs.idle_backlight_dim_ac_seconds),
-      battery: num(cs.idle_backlight_dim_battery_seconds),
-    };
-  } catch {
-    return { ac: null, battery: null };
-  }
+function readClientSettings(): any {
+  return (window as any).settingsStore?.m_ClientSettings ?? null;
 }
 
-function writeIdleBacklightDim(values: IdleDimValues): void {
-  const ss = (window as any).settingsStore;
-  if (typeof ss?.SetIdleBacklightDimSeconds !== "function") {
-    throw new Error("settingsStore.SetIdleBacklightDimSeconds unavailable");
+/** Minimal protobuf varint encoder (values here are small non-negative ints). */
+function encodeVarint(value: number): number[] {
+  const out: number[] = [];
+  let v = Math.max(0, Math.floor(value));
+  do {
+    let b = v & 0x7f;
+    v = Math.floor(v / 128);
+    if (v > 0) b |= 0x80;
+    out.push(b);
+  } while (v > 0);
+  return out;
+}
+
+/** Encode one wire-type-0 (varint) protobuf field. */
+function protoVarintField(fieldNumber: number, value: number): number[] {
+  return [...encodeVarint(fieldNumber << 3), ...encodeVarint(value)];
+}
+
+/** Push a partial msettings update live via SteamClient. Throws if unavailable. */
+function pushSettings(fields: { num: number; value: number }[]): void {
+  const sc = (window as any).SteamClient;
+  if (typeof sc?.System?.UpdateSettings !== "function") {
+    throw new Error("SteamClient.System.UpdateSettings unavailable");
   }
-  // First arg is bOnAC: true = AC value, false = battery value.
-  if (typeof values.ac === "number") ss.SetIdleBacklightDimSeconds(true, values.ac);
-  if (typeof values.battery === "number") ss.SetIdleBacklightDimSeconds(false, values.battery);
+  const bytes: number[] = [];
+  for (const f of fields) bytes.push(...protoVarintField(f.num, f.value));
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  sc.System.UpdateSettings(btoa(bin));
 }
 
 /**
- * Raise the idle backlight-dim timeout so gamescope won't dim while Trailer TV
- * plays. Backs the user's current values up to localStorage (crash-safe: a
- * session that dies mid-play is undone by the next settings-run's restore) and
- * only backs up once so re-entry never overwrites the true original with 24h.
+ * Stop the screen dimming while Trailer TV plays: raise both idle backlight-dim
+ * timeouts to ~24h and turn off adaptive brightness, in one live UpdateSettings
+ * push. Saves the originals (dim from the backend config.vdf, adaptive from the
+ * live client settings) to localStorage once, so a crash mid-session is undone
+ * on the next restore rather than leaving the dim disabled forever.
  */
-export function disableIdleBacklightDim(): {
+export async function disableIdleDim(): Promise<{
   ok: boolean;
-  saved?: IdleDimValues;
+  saved?: DimBackup;
+  liveAfter?: number | null;
+  configAfter?: number | null;
   error?: string;
-} {
+}> {
   try {
-    const saved = readIdleBacklightDim();
     if (!localStorage.getItem(DIM_BACKUP_KEY)) {
-      localStorage.setItem(DIM_BACKUP_KEY, JSON.stringify(saved));
+      const dim = await getDimSettings();
+      const cs = readClientSettings();
+      const backup: DimBackup = {
+        dimBattery: dim.battery,
+        dimAc: dim.ac,
+        adaptive:
+          typeof cs?.display_adaptive_brightness_enabled === "boolean"
+            ? cs.display_adaptive_brightness_enabled
+            : null,
+      };
+      localStorage.setItem(DIM_BACKUP_KEY, JSON.stringify(backup));
     }
-    writeIdleBacklightDim({ ac: DIM_DISABLED_SECONDS, battery: DIM_DISABLED_SECONDS });
-    return { ok: true, saved };
+    const saved: DimBackup = JSON.parse(localStorage.getItem(DIM_BACKUP_KEY)!);
+    pushSettings([
+      { num: FIELD_DIM_BATTERY, value: DIM_DISABLED_SECONDS },
+      { num: FIELD_DIM_AC, value: DIM_DISABLED_SECONDS },
+      { num: FIELD_ADAPTIVE_BRIGHTNESS, value: 0 },
+    ]);
+    // Verify the write actually landed: read the live client-settings value and
+    // the persisted config.vdf value back. If neither flipped to ~24h, the
+    // protobuf didn't apply (vs gamescope ignoring an applied setting).
+    const cs = readClientSettings();
+    const liveAfter =
+      typeof cs?.idle_backlight_dim_ac_seconds === "number"
+        ? cs.idle_backlight_dim_ac_seconds
+        : null;
+    const after = await getDimSettings();
+    return { ok: true, saved, liveAfter, configAfter: after.ac };
   } catch (e) {
     return { ok: false, error: String(e) };
   }
 }
 
-/** Restore the idle backlight-dim values saved by disableIdleBacklightDim. */
-export function restoreIdleBacklightDim(): {
+/** Restore the dim timeouts + adaptive brightness saved by disableIdleDim. An
+ * unknown original adaptive state defaults to on (the Deck default). */
+export function restoreIdleDim(): {
   ok: boolean;
-  restored?: IdleDimValues;
+  restored?: DimBackup;
   noop?: boolean;
   error?: string;
 } {
   try {
     const raw = localStorage.getItem(DIM_BACKUP_KEY);
     if (!raw) return { ok: true, noop: true };
-    const saved: IdleDimValues = JSON.parse(raw);
-    writeIdleBacklightDim(saved);
+    const saved: DimBackup = JSON.parse(raw);
+    const fields: { num: number; value: number }[] = [];
+    if (typeof saved.dimBattery === "number") fields.push({ num: FIELD_DIM_BATTERY, value: saved.dimBattery });
+    if (typeof saved.dimAc === "number") fields.push({ num: FIELD_DIM_AC, value: saved.dimAc });
+    fields.push({ num: FIELD_ADAPTIVE_BRIGHTNESS, value: saved.adaptive === false ? 0 : 1 });
+    pushSettings(fields);
     localStorage.removeItem(DIM_BACKUP_KEY);
     return { ok: true, restored: saved };
   } catch (e) {

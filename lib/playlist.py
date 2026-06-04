@@ -5,8 +5,13 @@ unit-testable with fixtures and has no hidden I/O.
 """
 from __future__ import annotations
 
+import logging
 import random
 from typing import Any, Callable
+
+# Routes through the same handler as the rest of the plugin (see lib.plugin_logging)
+# while keeping this module free of a hard decky dependency so it stays unit-testable.
+logger = logging.getLogger("decky-trailer-tv.playlist")
 
 FEATURED_URL = "https://store.steampowered.com/api/featuredcategories/?l=english&cc=us"
 APPDETAILS_URL = "https://store.steampowered.com/api/appdetails?appids={appid}&l=english&cc=us"
@@ -82,7 +87,10 @@ def get_candidate_appids(fetch_json: FetchJson, source: str) -> list[int]:
     featured = fetch_json(FEATURED_URL)
     primary = SOURCE_BUCKETS.get(source, SOURCE_BUCKETS[DEFAULT_SOURCE])
     ordered = primary + [b for b in ALL_BUCKETS if b not in primary]
-    return parse_featured_appids(featured, ordered)
+    appids = parse_featured_appids(featured, ordered)
+    # Shuffle so playback never starts with the same trailer every time.
+    random.shuffle(appids)
+    return appids
 
 
 def _proton_pulse_appids(fetch_json: FetchJson, sample_size: int = PROTON_PULSE_SAMPLE_SIZE) -> list[int]:
@@ -156,6 +164,38 @@ def parse_featured_appids(data: dict[str, Any], categories: list[str]) -> list[i
     return appids
 
 
+# Steam content-descriptor IDs that flag sexual / adult content. A screensaver
+# can be on a TV in a shared space, so we never play these.
+#   1 = Some Nudity or Sexual Content
+#   3 = Adult Only Sexual Content
+#   4 = Frequent Nudity or Sexual Content
+# (2 = Frequent Violence/Gore and 5 = General Mature are intentionally allowed.)
+_ADULT_DESCRIPTOR_IDS = frozenset({1, 3, 4})
+_ADULT_GENRE_KEYWORDS = ("sexual content", "nudity", "nsfw")
+
+
+def is_adult_content(data: dict[str, Any]) -> bool:
+    """True if the app is flagged as adult/sexual content and must never play.
+
+    Checks Steam's content descriptors, an 18+ age gate, and adult genres so a
+    title slips through only if Steam itself exposes no adult signal at all.
+    """
+    descriptors = data.get("content_descriptors") or {}
+    ids = descriptors.get("ids") or []
+    if any(isinstance(i, int) and i in _ADULT_DESCRIPTOR_IDS for i in ids):
+        return True
+    try:
+        if int(data.get("required_age") or 0) >= 18:
+            return True
+    except (TypeError, ValueError):
+        pass
+    for genre in data.get("genres") or []:
+        description = (genre.get("description") or "").lower()
+        if any(keyword in description for keyword in _ADULT_GENRE_KEYWORDS):
+            return True
+    return False
+
+
 def parse_trailer(appdetails: dict[str, Any], appid: int) -> dict[str, Any] | None:
     """Extract a single playable trailer for `appid`, or None if unavailable.
 
@@ -169,6 +209,16 @@ def parse_trailer(appdetails: dict[str, Any], appid: int) -> dict[str, Any] | No
     data = entry.get("data") or {}
     # Only real games -- skip hardware (e.g. "Steam Deck"), DLC, soundtracks, etc.
     if data.get("type") != "game":
+        return None
+    # Never play adult/NSFW titles in a screensaver.
+    if is_adult_content(data):
+        logger.info(
+            "parse_trailer: blocked adult content | appid=%s name=%s descriptors=%s required_age=%s",
+            appid,
+            data.get("name"),
+            (data.get("content_descriptors") or {}).get("ids"),
+            data.get("required_age"),
+        )
         return None
     movies = data.get("movies") or []
     if not movies:

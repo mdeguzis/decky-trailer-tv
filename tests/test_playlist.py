@@ -68,6 +68,33 @@ def test_parse_trailer_prefers_highlight_and_uses_hls():
 def test_parse_trailer_returns_none_when_no_movies_or_no_hls():
     assert parse_trailer(_appdetails(60, []), 60) is None
     assert parse_trailer(_appdetails(61, [{"id": 1, "thumbnail": "t.jpg"}]), 61) is None
+
+
+def _adult_appdetails(appid, **data_extra):
+    movies = [{"id": 1, "hls_h264": "a.m3u8", "thumbnail": "t.jpg", "highlight": True}]
+    details = _appdetails(appid, movies)
+    details[str(appid)]["data"].update(data_extra)
+    return details
+
+
+def test_parse_trailer_blocks_adult_content_descriptors():
+    # 1 = some nudity/sexual, 3 = adult only sexual, 4 = frequent nudity/sexual.
+    for ids in ([1], [3], [4], [2, 4]):
+        assert parse_trailer(_adult_appdetails(80, content_descriptors={"ids": ids}), 80) is None, ids
+
+
+def test_parse_trailer_blocks_18_plus_and_adult_genres():
+    assert parse_trailer(_adult_appdetails(81, required_age=18), 81) is None
+    assert parse_trailer(_adult_appdetails(82, required_age="18"), 82) is None
+    assert parse_trailer(_adult_appdetails(83, genres=[{"description": "Sexual Content"}]), 83) is None
+
+
+def test_parse_trailer_allows_non_adult_signals():
+    # Violence/gore (2) and general mature (5) are allowed; age under 18 is fine.
+    clip = parse_trailer(
+        _adult_appdetails(84, content_descriptors={"ids": [2, 5]}, required_age=17), 84
+    )
+    assert clip is not None
     assert parse_trailer(_appdetails(62, [{"id": 1}], success=False), 62) is None
 
 
@@ -86,8 +113,9 @@ def test_get_candidate_appids_primary_bucket_first_then_extras():
     # "popular" keeps top_sellers FIRST, then appends the other buckets as extras
     # (deduped, order preserved) so the rotation isn't tiny.
     result = get_candidate_appids(fake_fetch, "popular")
-    assert result[:3] == [1, 2, 3]  # primary bucket first
-    assert 99 in result and 50 in result  # extras merged in
+    # Order is shuffled now (so playback doesn't always start the same), so assert
+    # on membership rather than position: all bucket IDs present, deduped.
+    assert set(result) == {1, 2, 3, 99, 50}
     assert result.count(2) == 1  # deduped across buckets
     assert captured["url"] == FEATURED_URL
 

@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-03
+
+### Added
+- Shuffle: featured sources (Latest/Popular) are shuffled and the player starts
+  on a random clip, so playback does not always begin with the same trailer.
+- Adult/NSFW filter: trailers for titles flagged with Steam content descriptors
+  (some nudity/sexual, adult only, frequent nudity), an 18+ age gate, or adult
+  genres are never played.
+- Debug section on the Settings page: live state, countdown, brightness %,
+  backlight %, last fired, and the keep-awake strategy selector.
+- On-screen debug overlay during playback (debug mode): trailer N/total, strategy,
+  brightness %, backlight %, and a dim-event counter.
+- Brightness logging via RegisterForBrightnessChanges (works on any platform, not
+  just the Deck sysfs backlight).
+
+### Fixed
+- QAM no longer overflows: debug stats moved to the Settings page, so the panel
+  fits without cutting off the bottom. The Settings debug stats scroll into view.
+
+### Changed
+- Screen dim is a gamescope limitation that the plugin cannot override. Every
+  approach tried (UpdateSettings write, navigator.wakeLock, uinput nudge,
+  brightness write-back, config.vdf) is documented in
+  docs/dim-prevention-attempts.md. Keep-awake defaults stay available for
+  experimentation behind the debug panel.
+
 ## [0.5.19] - 2026-06-03
 
 ### Fixed

@@ -7,10 +7,9 @@ import {
   ToggleField,
   DropdownItem,
   SliderField,
-  Focusable,
 } from "@decky/ui";
-import { getSettings, setSettings, getLockScreenSettings } from "../lib/backend";
-import type { Settings, TrailerSource, KeepAwakeStrategy } from "../lib/types";
+import { getSettings, setSettings } from "../lib/backend";
+import type { Settings, TrailerSource } from "../lib/types";
 import { setPendingSettingsTab } from "../lib/settingsNav";
 
 const ROUTE = "/trailer-tv";
@@ -22,68 +21,6 @@ const SOURCE_OPTIONS: { data: TrailerSource; label: string }[] = [
   { data: "trending", label: "Trending" },
   { data: "random", label: "Random" },
 ];
-
-type Status = NonNullable<ReturnType<NonNullable<typeof window.__TRAILER_TV_STATUS__>>>;
-
-function formatLastFired(ms: number | null): string {
-  if (!ms) return "never";
-  const d = new Date(ms);
-  const utc = d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
-  return `${utc} (${d.toLocaleTimeString()})`;
-}
-
-/** Live status panel, shown only when debug is enabled. Polls the watcher. */
-function DebugStats() {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [hasPin, setHasPin] = useState<boolean | null>(null);
-  useEffect(() => {
-    const tick = () => setStatus(window.__TRAILER_TV_STATUS__?.() ?? null);
-    tick();
-    const id = window.setInterval(tick, 1000);
-    void getLockScreenSettings().then((s) => setHasPin(s.has_pin));
-    return () => window.clearInterval(id);
-  }, []);
-
-  if (!status) {
-    return <div style={{ fontSize: 12, color: "#888" }}>status unavailable</div>;
-  }
-  const state = !status.enabled
-    ? "disabled (paused)"
-    : status.active
-      ? "ACTIVE (playing)"
-      : status.gameRunning
-        ? "suppressed (game running)"
-        : "idle-watching";
-  const countdown = !status.enabled
-    ? "paused"
-    : status.active
-      ? "-"
-      : `${status.secondsUntil}s`;
-  return (
-    <div
-      style={{
-        fontSize: 11,
-        lineHeight: 1.5,
-        color: "#ccc",
-        fontFamily: "monospace",
-        whiteSpace: "normal",
-        overflowWrap: "anywhere",
-        wordBreak: "break-word",
-        maxWidth: "100%",
-        boxSizing: "border-box",
-        paddingRight: 8,
-      }}
-    >
-      <div>state: {state}</div>
-      <div>
-        countdown: {countdown} / {status.triggerSeconds}s ({status.basis})
-      </div>
-      <div>last fired:</div>
-      <div>{formatLastFired(status.lastFiredAt)}</div>
-      <div>lock on exit: {hasPin === null ? "..." : hasPin ? "yes (PIN set)" : "no"}</div>
-    </div>
-  );
-}
 
 export function QamPanel() {
   const [settings, setLocal] = useState<Settings | null>(null);
@@ -169,44 +106,17 @@ export function QamPanel() {
             Navigation.Navigate(SETTINGS_ROUTE);
           }}
         >
-          Settings
+          Settings &amp; Debug
         </ButtonItem>
       </PanelSectionRow>
       <PanelSectionRow>
         <ToggleField
           label="Debug"
-          description="Show live state, countdown, and last-fired time."
+          description="Live state, brightness, and keep-awake options are on the Settings page."
           checked={settings.debug}
           onChange={(v) => void update({ debug: v })}
         />
       </PanelSectionRow>
-      {settings.debug && (
-        <PanelSectionRow>
-          <DropdownItem
-            label="Keep-awake"
-            rgOptions={[
-              { data: "settings", label: "settings (dim timeout)" },
-              { data: "uinput", label: "uinput (real input)" },
-              { data: "brightness", label: "brightness write-back" },
-              { data: "off", label: "off (audit only)" },
-            ]}
-            selectedOption={settings.keepAwakeStrategy}
-            onChange={(o) => void update({ keepAwakeStrategy: o.data as KeepAwakeStrategy })}
-          />
-        </PanelSectionRow>
-      )}
-      {settings.debug && (
-        <PanelSectionRow>
-          <DebugStats />
-        </PanelSectionRow>
-      )}
-      {/* Focusable bottom spacer: the QAM only scrolls to focusable elements, so
-          this lets gamepad nav reach the end and reveals the debug stats above.
-          Tall (220px) so touchscreen drag-scroll can bottom out well BELOW the
-          countdown/last-fired lines instead of cutting them off. */}
-      <Focusable style={{ height: 220 }}>
-        <div style={{ height: 220 }} />
-      </Focusable>
     </PanelSection>
   );
 }

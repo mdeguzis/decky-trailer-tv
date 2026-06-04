@@ -88,8 +88,14 @@ export function TrailerListView({
         ))
       )}
 
-      {/* Spacer so the last row clears the Steam BPM footer. */}
-      <div style={{ height: 80, flexShrink: 0 }} aria-hidden="true" />
+      {/* Focusable bottom spacer: the list only scrolls to focusable elements, so
+          a plain spacer never gets revealed and the last row stays stuck under the
+          Steam BPM footer. Giving gamepad nav a real target below the last row
+          forces the scroll so the end of the list clears the footer. Matches the
+          QAM panel's spacer. */}
+      <Focusable style={{ height: 120, flexShrink: 0 }}>
+        <div style={{ height: 120 }} />
+      </Focusable>
     </Focusable>
   );
 }
