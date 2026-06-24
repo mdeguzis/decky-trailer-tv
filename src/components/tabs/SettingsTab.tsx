@@ -71,13 +71,9 @@ export function SettingsTab() {
           stopPoll();
           setInstalling(false);
           logEvent("INFO", "update finished", { state: s.state, version: s.version, error: s.error });
-          // Auto-reload on success so the user doesn't have to manually restart
-          // Decky (matches decky-proton-pulse). Backend has the 'root' flag, so
-          // restarting plugin_loader picks up the new files.
-          if (s.state === "success") {
-            setReloading(true);
-            void triggerReload(PLUGIN_NAME);
-          }
+          // Don't auto-reload. The new files are staged; let the user restart on
+          // their own time via the "Restart plugin" button (matches
+          // decky-proton-pulse). Restarting mid-playback would be jarring.
         }
       });
     }, 1000);
@@ -119,6 +115,20 @@ export function SettingsTab() {
     stopPoll();
     setInstalling(false);
   };
+
+  // Restart the plugin to apply a staged update, triggered by the user on their
+  // own time. Mirrors decky-proton-pulse: install stages the files, the user
+  // restarts when ready. If reload/restart succeeds the page goes away on its own.
+  const handleRestartPlugin = async () => {
+    setReloading(true);
+    const outcome = await triggerReload(PLUGIN_NAME);
+    logEvent("INFO", "restart plugin requested", { outcome });
+    if (outcome === "failed") {
+      setReloading(false);
+    }
+  };
+
+  const updateApplied = status?.state === "success";
 
   // Seed the release-notes carousel with the pending release after a check;
   // otherwise load channel history.
@@ -243,14 +253,19 @@ export function SettingsTab() {
         </>
       )}
 
-      {status?.state === "success" && !installing && (
-        <PanelSectionRow>
-          <div style={{ fontSize: 12, color: "#8dbf40" }}>
-            {reloading
-              ? `${formatVersion(status.version)} installed. Reloading the plugin...`
-              : `${formatVersion(status.version)} installed.`}
-          </div>
-        </PanelSectionRow>
+      {updateApplied && !installing && (
+        <>
+          <PanelSectionRow>
+            <div style={{ fontSize: 12, color: "#8dbf40" }}>
+              {formatVersion(status?.version)} installed. Restart the plugin to apply, on your own time.
+            </div>
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ButtonItem layout="below" disabled={reloading} onClick={() => void handleRestartPlugin()}>
+              {reloading ? "Restarting..." : "Restart plugin"}
+            </ButtonItem>
+          </PanelSectionRow>
+        </>
       )}
 
       {status?.state === "error" && !installing && (
