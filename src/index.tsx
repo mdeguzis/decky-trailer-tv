@@ -18,8 +18,7 @@ import {
   startControllerActivity,
   startComputerActiveState,
   startResumeReset,
-  COMPUTER_ACTIVE,
-  COMPUTER_IDLE,
+  EComputerActiveState,
 } from "./lib/steamPower";
 
 const ROUTE = "/trailer-tv";
@@ -43,7 +42,7 @@ export interface TrailerTvStatus {
 
 declare global {
   interface Window {
-    __TRAILER_TV_START__?: () => void;
+    __TRAILER_TV_START__?: () => boolean;
     __TRAILER_TV_STOP__?: () => void;
     __TRAILER_TV_ON_EXIT__?: () => void;
     __TRAILER_TV_IDLE_SECONDS__?: number;
@@ -63,6 +62,7 @@ function startIdleWatcher() {
   let active = false;
   let lastFiredAt: number | null = null;
   let enabled = true;
+  let lastGameRunning = false; // for logging game start/stop transitions only
   let customIdleSeconds = 0;
   let fallbackSeconds = FALLBACK_IDLE_SECONDS;
   let dimBattery: number | null = null; // backlight dim seconds (from config.vdf)
@@ -90,7 +90,15 @@ function startIdleWatcher() {
   const loadIdle = () =>
     void Promise.all([getSettings(), getDimSettings()])
       .then(([s, dim]) => {
-        enabled = s.enabled ?? true;
+        const nextEnabled = s.enabled ?? true;
+        if (nextEnabled !== enabled) {
+          logEvent("INFO", "enabled state changed", {
+            enabled: nextEnabled,
+            source: "getSettings",
+            field: "enabled",
+          });
+        }
+        enabled = nextEnabled;
         customIdleSeconds = s.customIdleSeconds ?? 0;
         fallbackSeconds = s.idleSeconds ?? FALLBACK_IDLE_SECONDS;
         dimBattery = dim.battery;
@@ -112,15 +120,18 @@ function startIdleWatcher() {
     (window.__TRAILER_TV_IDLE_SECONDS__ ??
       computeIdleSeconds(customIdleSeconds, fallbackSeconds, currentBacklightDim())) * 1000;
 
-  const start = (trigger: string) => {
-    if (active) return;
+  // Returns true only if it actually navigated to the player. Every activation
+  // path (idle tick, manual "Play now", global hook) funnels through here so the
+  // game-running guard can never be bypassed.
+  const start = (trigger: string): boolean => {
+    if (active) return false;
     if (!enabled) {
       logEvent("INFO", "screensaver suppressed: disabled", { trigger });
-      return;
+      return false;
     }
     if (isGameRunning()) {
       logEvent("INFO", "screensaver suppressed: game running", { trigger });
-      return;
+      return false;
     }
     active = true;
     lastFiredAt = Date.now();
@@ -133,6 +144,7 @@ function startIdleWatcher() {
       idleForMs: Date.now() - lastActivity,
     });
     Navigation.Navigate(ROUTE);
+    return true;
   };
 
   const stop = () => {
@@ -150,6 +162,20 @@ function startIdleWatcher() {
 
   const markActivity = () => {
     lastActivity = Date.now();
+  };
+
+  // A game launched while the screensaver was already playing -- get out of the
+  // way. Set active=false up front so a follow-up tick can't fire NavigateBack
+  // again before the player unmounts and calls onExit.
+  const dismissForGame = () => {
+    if (!active) return;
+    active = false;
+    lastActivity = Date.now();
+    logEvent("INFO", "screensaver dismissed: game launched", {
+      source: "isGameRunning",
+      active: false,
+    });
+    Navigation.NavigateBack();
   };
 
   window.__TRAILER_TV_START__ = () => start("manual-global");
@@ -175,14 +201,19 @@ function startIdleWatcher() {
   // it fires relative to our trigger + the dim, and reset on Active. Once we
   // confirm the Idle timing on-device, the trigger can move onto this directly.
   const stopActiveState = startComputerActiveState((state, time) => {
-    const name = state === COMPUTER_IDLE ? "Idle" : state === COMPUTER_ACTIVE ? "Active" : `state-${state}`;
+    const name =
+      state === EComputerActiveState.Idle
+        ? "Idle"
+        : state === EComputerActiveState.Active
+          ? "Active"
+          : `state-${state}`;
     logEvent("INFO", "computer active-state changed", {
       state: name,
       time,
       ourTriggerSeconds: Math.round(idleMs() / 1000),
       idleForMs: Date.now() - lastActivity,
     });
-    if (state === COMPUTER_ACTIVE) markActivity();
+    if (state === EComputerActiveState.Active) markActivity();
   });
 
   // On wake from suspend, JS timers were frozen so our idle clock is stale --
@@ -209,10 +240,26 @@ function startIdleWatcher() {
   };
 
   const tick = window.setInterval(() => {
-    if (active) return;
+    const gameRunning = isGameRunning();
+    // Log every game start/stop transition (once per change, never per tick) so
+    // the guard is verifiable from logs alone.
+    if (gameRunning !== lastGameRunning) {
+      lastGameRunning = gameRunning;
+      logEvent("INFO", gameRunning ? "game running detected" : "game stopped", {
+        source: "isGameRunning",
+        active,
+        enabled,
+      });
+    }
+
+    if (active) {
+      // Screensaver is up -- if a game just launched, dismiss it immediately.
+      if (gameRunning) dismissForGame();
+      return;
+    }
     // Paused or in-game -- keep the idle clock reset so it doesn't immediately
     // fire the moment it's re-enabled or the game exits.
-    if (!enabled || isGameRunning()) {
+    if (!enabled || gameRunning) {
       lastActivity = Date.now();
       return;
     }

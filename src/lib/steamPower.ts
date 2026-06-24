@@ -4,10 +4,20 @@
 // (disableIdleBacklightDim / restoreIdleBacklightDim) which goes through Steam's
 // own settingsStore so the change reaches gamescope live.
 
+import { findModuleExport } from "@decky/ui";
 import { logEvent, getDimSettings } from "./backend";
 
 // SteamClient and settingsStore are injected into the SteamUI global scope.
 declare const SteamClient: any;
+
+// Mirror of Steam's EACState (SteamClient.System battery state). Not re-exported
+// from @decky/ui's entry point, so we keep a local copy with the exact values.
+export enum EACState {
+  Unknown = 0,
+  Disconnected = 1,
+  Connected = 2,
+  ConnectedSlow = 3,
+}
 
 // Take over this many seconds before Steam's dim, so we beat the OS blank.
 const FIRE_BEFORE_SEC = 15;
@@ -46,11 +56,11 @@ export function stopAppLifetimeTracking(): void {
   launchingApps.clear();
 }
 
-/** Subscribe to AC/battery changes. eACState: 2 = connected to power. */
+/** Subscribe to AC/battery changes. eACState Connected = plugged into power. */
 export function startPowerTracking(): void {
   try {
     unregister = SteamClient.System.RegisterForBatteryStateChanges((state: any) => {
-      const ac = state?.eACState === 2;
+      const ac = state?.eACState === EACState.Connected;
       if (ac !== onAC) {
         onAC = ac;
         logEvent("INFO", "power source changed", {
@@ -109,9 +119,13 @@ export function startControllerActivity(onInput: () => void): () => void {
   };
 }
 
-// Steam's own computer active-state (EComputerActiveState).
-export const COMPUTER_ACTIVE = 1;
-export const COMPUTER_IDLE = 2;
+// Mirror of Steam's EComputerActiveState (drives WebChat idle/active + the
+// dim/suspend). Not re-exported from @decky/ui's entry point, so kept local.
+export enum EComputerActiveState {
+  Invalid = 0,
+  Active = 1,
+  Idle = 2,
+}
 
 /**
  * Call `onResume` when the Deck wakes from suspend. JS timers freeze during
@@ -138,7 +152,7 @@ export function startResumeReset(onResume: () => void): () => void {
 
 /**
  * Subscribe to Steam's own idle/active detection -- the same signal that drives
- * the dim/suspend. `state` is EComputerActiveState (1 = Active, 2 = Idle); `time`
+ * the dim/suspend. `state` is EComputerActiveState (Active / Idle); `time`
  * is a Steam timestamp. This is the non-hacky way to know when the user is idle.
  */
 export function startComputerActiveState(
@@ -305,7 +319,11 @@ export function computeIdleSeconds(
  */
 export function lockSteamScreen(): { ok: boolean; locked: boolean; error?: string } {
   try {
-    const ss = (window as any).securitystore;
+    // Prefer the global store; fall back to locating it by a known export
+    // (GetClientSetting) in case window.securitystore isn't populated.
+    const ss =
+      (window as any).securitystore ??
+      findModuleExport((e: any) => e?.GetClientSetting && e?.SetActiveLockScreenProps);
     if (!ss?.GetSettings || !ss?.SetActiveLockScreenProps) {
       return { ok: false, locked: false, error: "securitystore unavailable" };
     }

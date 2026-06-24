@@ -8,7 +8,8 @@ import {
   DropdownItem,
   SliderField,
 } from "@decky/ui";
-import { getSettings, setSettings } from "../lib/backend";
+import { getSettings, setSettings, logEvent } from "../lib/backend";
+import { isGameRunning } from "../lib/steamPower";
 import type { Settings, TrailerSource } from "../lib/types";
 import { setPendingSettingsTab } from "../lib/settingsNav";
 
@@ -80,9 +81,31 @@ export function QamPanel() {
           onChange={(v) => void update({ customIdleSeconds: v })}
         />
       </PanelSectionRow>
-      {/* Manual trigger: launches the player so you can watch the loaded trailers. */}
+      {/* Manual trigger: launches the player so you can watch the loaded trailers.
+          Routes through the global start hook so the game-running guard applies;
+          only navigates directly if the hook isn't installed (and never over a
+          running game). */}
       <PanelSectionRow>
-        <ButtonItem layout="below" onClick={() => window.__TRAILER_TV_START__?.() ?? Navigation.Navigate(ROUTE)}>
+        <ButtonItem
+          layout="below"
+          onClick={() => {
+            const startHook = window.__TRAILER_TV_START__;
+            if (startHook) {
+              // start() logs its own outcome (activating / suppressed: game running).
+              startHook();
+              return;
+            }
+            // Fallback path only reached when the global hook isn't installed.
+            if (isGameRunning()) {
+              logEvent("INFO", "play now suppressed: game running", {
+                source: "QamPanel.fallback",
+              });
+              return;
+            }
+            logEvent("INFO", "play now: navigating via fallback", { source: "QamPanel.fallback" });
+            Navigation.Navigate(ROUTE);
+          }}
+        >
           Play now
         </ButtonItem>
       </PanelSectionRow>
