@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-24
+
+### Added
+- Self-updater now stages the update and waits for you to restart. Installing no
+  longer reloads the plugin on its own; a "Restart plugin" button applies the
+  update when you are ready, so it never cuts off playback partway through.
+
+### Fixed
+- The screensaver can no longer start while a game is running. The QAM "Play now"
+  button was skipping the game check; it now goes through the one activation path
+  that always checks for a running game. The screensaver also closes itself if a
+  game launches while it is already playing.
+
+### Changed
+- Use Steam's EACState and EComputerActiveState enums instead of raw numbers, and
+  fall back to findModuleExport when locating the lock-screen securitystore.
+- Log every game start/stop, enabled toggle, activation, suppression, and dismiss
+  so the game guard can be verified from the logs.
+
 ## [0.6.0] - 2026-06-03
 
 ### Added
